@@ -6,7 +6,7 @@
 ## Current checkpoint — 2026-11-01
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
-- Active branch: `development`; `master` remains the starting baseline.
+- Active work branch: `work/candidate-scoped-composition-sessions` (draft PR #3 targeting `development`); `master` remains the starting baseline.
 - Current stage: local manifest/placement proofs and a source-pinned FSM_Foundry → FSM_COS → role-adapter workflow are source-implemented. Candidate-scoped composition sessions now isolate each provisioning operation's FSM_COS composer/catalog boundary and runtime registry. Repository-backed exact-address retrieval, SHA-256 verification, pinned dependency-closure preparation, atomic private-catalog staging, and host-allowlisted precompiled materialization are implemented against MicroBundleRepository Core contracts. A concrete persistent/network storage adapter and production server role host remain incomplete.
 - Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
 - Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
@@ -24,10 +24,10 @@
 - `src/ServerApp.FoundryHost/ServerRoleCompositionSessions.cs`: per-candidate FSM_COS composer/catalog boundary and runtime registry; successful sessions are retained with the live runtime.
 - `src/ServerApp.FoundryHost/RepositoryBackedCompositionSession.cs`: exact inventory resolution, immutable artifact retrieval, SHA-256 verification, exact-version transitive dependency closure, atomic catalog publication, and host-registered precompiled materializer allowlist.
 - MicroBundleRepository Core source pinned in CI at `2b23967262766a0466b263e0838afbf8affd234b`.
-- [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
+- [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
 - `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
 - `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: latest PR CI run #41341712499 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
+- Verification status: latest PR CI run #41351252144 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
 
 ## Resume sequence
 
