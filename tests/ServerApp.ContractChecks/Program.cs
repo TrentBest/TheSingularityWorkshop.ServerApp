@@ -23,7 +23,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("host placement reports insufficient capacity", HostPlacementReportsInsufficientCapacity),
     ("host placement rejects duplicate host identifiers", HostPlacementRejectsDuplicateHosts),
     ("host placement rejects invalid host snapshots", HostPlacementRejectsInvalidHosts),
-    ("host placement continues independent instances when one cannot fit", HostPlacementContinuesIndependentInstances)
+    ("host placement continues independent instances when one cannot fit", HostPlacementContinuesIndependentInstances),
+    ("host placement skips dependents when a dependency cannot be placed", HostPlacementSkipsUnplacedDependents)
 };
 
 var failures = new List<string>();
@@ -349,6 +350,32 @@ static Task HostPlacementContinuesIndependentInstances()
            result.UnplacedInstances.Single().InstanceId == "too-large" &&
            result.Placements.Single().InstanceId == "fits",
         "An unplaceable instance prevented an independent instance from being placed.");
+    return Task.CompletedTask;
+}
+
+static Task HostPlacementSkipsUnplacedDependents()
+{
+    var root = ValidManifest() with
+    {
+        InstanceId = "root",
+        Resources = new ResourceRequirements { CpuCores = 3, MemoryMiB = 512 }
+    };
+    var child = ValidManifest() with
+    {
+        InstanceId = "child",
+        Dependencies = ["root"]
+    };
+    var independent = ValidManifest() with { InstanceId = "independent" };
+    var result = HostPlacementPlanner.Build(
+        [child, independent, root],
+        [new HostCapacityProfile("small-host", 2, 256)]);
+
+    Assert(result.PlanAccepted &&
+           result.Placements.Select(x => x.InstanceId).SequenceEqual(["independent"]) &&
+           result.UnplacedInstances.Select(x => x.InstanceId).ToHashSet(StringComparer.Ordinal)
+               .SetEquals(["root", "child"]) &&
+           result.UnplacedInstances.Single(x => x.InstanceId == "child").Reason.Contains("root"),
+        "A dependent was placed even though its required instance could not be placed.");
     return Task.CompletedTask;
 }
 
