@@ -109,7 +109,7 @@ The first proof does not establish a distributed queue, durable cross-process wo
 - [x] ServerApp integration tracked in [issue #1](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/1).
 - [x] Exact Foundry source dependency pinned in CI and local build instructions.
 - [x] Host integration project calls the actual Foundry coordinator and registered-handler APIs.
-- [x] Contract checks cover ready, failed/not-ready, duplicate pending instance, and cancellation before start.
+- [x] Contract checks cover ready, failed/not-ready, duplicate pending instance, cancellation before start, and cooperative cancellation while a role handler is running.
 - [ ] CI build/test result verified for the exact ServerApp commit and pinned Foundry revision.
 - [ ] FSM_COS composition handoff and RuntimeAssembly-consuming role-host contract implemented.
 - [ ] Runtime readiness is distinct from workflow completion in observable results.
