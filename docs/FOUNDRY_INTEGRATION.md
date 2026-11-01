@@ -101,7 +101,7 @@ Foundry workflow success means every registered step completed. ServerApp's `Rea
 
 ## 5. Dependency and build strategy
 
-Both Foundry and FSM_COS are built from pinned source; no new NuGet package is required or published. CI checks out these exact revisions:
+Foundry, FSM_COS, MicroBundleDomain, and MicroBundleRepository Core are built from pinned source; no new NuGet package is required or published. CI checks out these exact revisions:
 
 | Repository | Commit |
 |---|---|
@@ -112,7 +112,7 @@ Both Foundry and FSM_COS are built from pinned source; no new NuGet package is r
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
 | [MicroBundleRepository](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository) | `2b23967262766a0466b263e0838afbf8affd234b` |
 
-FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
+FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj`, `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`, and `_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
 For a local checkout from the ServerApp repository root:
 
@@ -127,22 +127,24 @@ git clone https://github.com/TrentBest/FSM_UserIO.git _deps/FSM_UserIO
 git -C _deps/FSM_UserIO checkout db5b59d0521a341f97e6077e3508eb2bd7171607
 git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain.git _deps/TheSingularityWorkshop.MicroBundleDomain
 git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591aec2337ad4470bfadb20fb11e
+git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository.git _deps/MicroBundleRepository
+git -C _deps/MicroBundleRepository checkout 2b23967262766a0466b263e0838afbf8affd234b
 dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. CI passed with 10 documentation/compiler warnings originating in the pinned FSM_API and FSM_COS source projects; there were zero build errors, and the ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
-The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
+The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, concrete persistent/network repository deployment, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. The host-side repository resolver consumes injected `IMicroBundleRepository` and inventory-observer contracts; tests use an in-memory implementation. It does not expose a REST endpoint or deploy storage. Exact-address retrieval, SHA-256 verification, pinned closure preparation, and precompiled materialization are implemented and contract-tested; operational authentication, authorization, provenance policy, and storage deployment remain separate requirements.
 
 ## 7. Progress gate
 
 - [x] Foundry selected as the mandatory workflow execution substrate.
 - [x] Actual Foundry and FSM_COS source boundaries inspected.
 - [x] ServerApp integration tracked in [issue #1](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/1).
-- [x] Exact Foundry source dependency pinned in CI and local build instructions.
+- [x] Exact Foundry, FSM_COS, MicroBundleDomain, and MicroBundleRepository Core source dependencies pinned in CI and local build instructions.
 - [x] Host integration project calls the actual Foundry coordinator and registered-handler APIs.
 - [x] Contract checks cover ready, failed/not-ready, duplicate pending instance, cancellation before start, and cooperative cancellation while a role handler is running.
 - [x] FSM_COS composition handoff implemented through a separate host-owned RuntimeManifest and approved role-definition catalog.
@@ -152,9 +154,9 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Repository-backed candidate preparation resolves exact immutable artifact addresses, retrieves and SHA-256 verifies each artifact, enforces exact-version transitive dependencies, and atomically publishes a private catalog only after full preparation.
 - [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; artifact bytes are never loaded as assemblies or scripts.
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
-- [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
-- [x] Core contract checks passed 23/23; the Foundry/FSM_COS host contract-check executable passed.
-- [ ] Implement repository-backed artifact retrieval, hash verification, and explicit precompiled materialization within each candidate session; the current session factory still uses host-provided in-memory catalogs in contract fixtures.
+- [x] CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed with six exact source dependencies pinned.
+- [x] Core contract checks passed 23/23; the Foundry/FSM_COS/repository host contract-check executable passed.
+- [ ] Integrate a concrete persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
 - [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
 
 
