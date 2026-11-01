@@ -37,6 +37,22 @@ The versioned machine-readable schema is [server-role-manifest.v1.schema.json](.
 
 Unknown JSON properties are rejected. The JSON Schema is the published structural contract; the runtime validator enforces the current implementation's supported version, identifier rules, duplicate-dependency rule, and resource bounds. The first implementation also rejects missing/invalid identifiers, duplicate dependency names, unsupported schema versions, and out-of-range resource requests.
 
+## Provisioning flow
+
+This is the intended control flow of the first local proof. The diagram is source-aligned with the coordinator and registered adapter boundary; it does not depict distributed placement or a running production service.
+
+```mermaid
+flowchart TD
+    A[Server-role JSON manifest] --> B[Parse and validate]
+    B -->|Invalid| X[Failed: validation errors]
+    B -->|Valid| C[Resolve registered RoleId]
+    C -->|No registered adapter| Y[Failed: unsupported role]
+    C -->|Adapter found| D[Invoke trusted adapter]
+    D --> E{Adapter reports ready?}
+    E -->|Yes| R[Ready]
+    E -->|No or throws| F[Failed]
+```
+
 ## Provisioning boundary
 
 The initial local coordinator performs these steps:
