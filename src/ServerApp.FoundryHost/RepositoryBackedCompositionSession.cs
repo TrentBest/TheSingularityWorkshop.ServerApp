@@ -12,7 +12,7 @@ namespace ServerApp.FoundryHost;
 public interface IServerRolePrecompiledMicroBundleRegistry
 {
     bool TryMaterialize(
-        MicroBundleArtifact artifact,
+        MicroBundleArtifactAddress address,
         out IMicroBundle? bundle);
 }
 
@@ -22,7 +22,7 @@ public interface IServerRolePrecompiledMicroBundleRegistry
 /// </summary>
 public sealed class ServerRolePrecompiledMicroBundleRegistry : IServerRolePrecompiledMicroBundleRegistry
 {
-    private readonly IReadOnlyDictionary<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>> _factories;
+    private readonly IReadOnlyDictionary<MicroBundleArtifactAddress, Func<IMicroBundle>> _factories;
 
     public ServerRolePrecompiledMicroBundleRegistry(
         IEnumerable<KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>> registrations)
@@ -39,17 +39,16 @@ public sealed class ServerRolePrecompiledMicroBundleRegistry : IServerRolePrecom
         _factories = new ReadOnlyDictionary<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(factories);
     }
 
-    public bool TryMaterialize(MicroBundleArtifact artifact, out IMicroBundle? bundle)
+    public bool TryMaterialize(MicroBundleArtifactAddress address, out IMicroBundle? bundle)
     {
-        ArgumentNullException.ThrowIfNull(artifact);
-        if (!_factories.TryGetValue(artifact.Address, out var factory))
+        if (!_factories.TryGetValue(address, out var factory))
         {
             bundle = null;
             return false;
         }
 
-        bundle = factory(artifact)
-            ?? throw new InvalidOperationException($"Precompiled materializer for '{artifact.Address}' returned null.");
+        bundle = factory()
+            ?? throw new InvalidOperationException($"Precompiled materializer for '{address}' returned null.");
         return true;
     }
 }
@@ -171,7 +170,7 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
                 throw new InvalidOperationException(
                     $"Repository returned '{artifact.Address}' for exact request '{address}'.");
 
-            if (!_materializers.TryMaterialize(artifact, out var bundle) || bundle is null)
+            if (!_materializers.TryMaterialize(address, out var bundle) || bundle is null)
                 throw new InvalidOperationException(
                     $"No host-approved precompiled MicroBundle implementation is registered for '{address}'.");
 
