@@ -3,7 +3,7 @@
 
 # Foundry Integration Boundary
 
-**Status: first Foundry → FSM_COS → role-adapter vertical slice implemented in source; CI verification pending.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
+**Status: first Foundry → FSM_COS → role-adapter vertical slice implemented in source; candidate-scoped composition sessions added, with CI verification pending.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
 
 ## 1. The three jobs are different
 
@@ -49,7 +49,7 @@ IServerRoleRuntimeAdapter.StartAsync(manifest, assembly)
 explicit role readiness -> ServerApp result
 ```
 
-The first composed workflow host now exists in `FoundryComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, constructs a separate `RuntimeManifest`, calls `RuntimeExperienceHost.ComposeAndRegister`, and returns the composed assembly. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture adapter; a production runtime adapter remains future work.
+The first composed workflow host now exists in `FoundryComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, creates a fresh `IServerRoleCompositionSession` for that provisioning operation, constructs a separate `RuntimeManifest`, and composes through that session. Each session owns its own FSM_COS composer, catalog boundary, and runtime registry. The live session is retained with the successful runtime; failed or cancelled activation forgets registry metadata and disposes the candidate session. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture adapter; a production runtime adapter remains future work.
 
 - **ServerApp.Core** remains independent of Foundry and FSM_COS. It owns operational manifests, dependency planning, capacity placement, and fleet lifecycle contracts.
 - **Foundry** owns workflow acceptance, sequential execution through explicitly registered handlers, run snapshots, cancellation, and structured workflow outcomes.
@@ -82,14 +82,14 @@ FSM_COS source exposes `FsmCos.Execute` / `TryExecute`, `RuntimeManifest`, and `
 `FoundryComposedProvisioningHost` submits a fixed, host-authored workflow with three sequential steps:
 
 1. **Validate role:** validate and snapshot the operational manifest, resolve the approved role definition, and require a registered runtime adapter.
-2. **Compose runtime:** construct a new FSM_COS `RuntimeManifest` from the approved root list and a host-assigned runtime ID; compose through the injected `IFsmCos` instance, which owns its host-supplied `IMicroBundleCatalog`.
+2. **Compose runtime:** create a candidate-scoped composition session, construct a new FSM_COS `RuntimeManifest` from the approved root list and a host-assigned runtime ID, and compose through the session's private `IFsmCos`/`IMicroBundleCatalog` pair.
 3. **Activate role:** select the composed assembly in FSM_COS host metadata, pass the live `RuntimeAssembly` to the registered `IServerRoleRuntimeAdapter`, and report `Ready` only when the adapter returns `IsReady=true`.
 
 The role definition catalog is host-owned and maps exact `RoleId` values to immutable root bundle/version requests. The client-facing `ServerRoleManifest` contains no bundle IDs, type names, assembly paths, or executable workflow steps. This prevents a provisioning request from choosing arbitrary MicroBundles or handlers.
 
 The Foundry workflow context contains only a GUID correlation value. Live `RuntimeAssembly` references remain in a private host operation dictionary because Foundry context is explicitly bounded JSON data, not an object transport or runtime container.
 
-Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, and a not-ready adapter fails the workflow. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
+Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, a not-ready adapter fails the workflow, and two concurrent candidates can resolve different versions of the same BundleId from isolated catalogs. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
 
 Foundry workflow success means every registered step completed. ServerApp's `Ready` state is written only after the role adapter confirms readiness. FSM_COS registry selection is metadata, not execution. Neither a successful composition nor a successful workflow proves a production listener, health endpoint, or distributed host.
 
@@ -141,10 +141,13 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] FSM_COS composition handoff implemented through a separate host-owned RuntimeManifest and approved role-definition catalog.
 - [x] RuntimeAssembly passed to an explicit ServerApp role adapter; Foundry workflow context carries only an opaque operation ID.
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
+- [x] Candidate-scoped session abstraction gives every provisioning operation its own FSM_COS composer/catalog boundary and runtime registry; successful sessions remain retained with their runtime.
+- [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
 - [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Foundry/FSM_COS host contract-check executable passed.
-- [ ] Replace the in-memory MicroBundle catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
-- [ ] Replace the in-memory catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
+- [ ] Implement repository-backed artifact retrieval, hash verification, and explicit precompiled materialization within each candidate session; the current session factory still uses host-provided in-memory catalogs in contract fixtures.
+- [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
+
 
 ---
 
