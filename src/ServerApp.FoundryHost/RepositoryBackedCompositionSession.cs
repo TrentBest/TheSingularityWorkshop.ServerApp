@@ -93,6 +93,8 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
     private readonly IServerRolePrecompiledMicroBundleRegistry _materializers;
     private readonly CandidateMicroBundleCatalog _catalog = new();
     private readonly RuntimeExperienceHost _host;
+    private readonly object _stateGate = new();
+    private int _prepareInProgress;
     private bool _prepared;
     private bool _disposed;
 
@@ -109,8 +111,18 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
         _host = new RuntimeExperienceHost(new FsmCos(_catalog));
     }
 
-    public async ValueTask PrepareAsync(CancellationToken cancellationToken)
+    public ValueTask PrepareAsync(CancellationToken cancellationToken)
     {
+        if (Interlocked.CompareExchange(ref _prepareInProgress, 1, 0) != 0)
+            throw new InvalidOperationException("Candidate preparation is already in progress.");
+
+        return PrepareOnceAsync(cancellationToken);
+    }
+
+    private async ValueTask PrepareOnceAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
         ThrowIfDisposed();
         if (_prepared)
             throw new InvalidOperationException("A candidate composition session can be prepared only once.");
@@ -191,8 +203,17 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        _catalog.Publish(staged);
-        _prepared = true;
+        lock (_stateGate)
+        {
+            ThrowIfDisposed();
+            _catalog.Publish(staged);
+            _prepared = true;
+        }
+        }
+        finally
+        {
+            Volatile.Write(ref _prepareInProgress, 0);
+        }
     }
 
     public RuntimeAssembly Compose(RuntimeManifest manifest)
@@ -203,13 +224,13 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
         return _host.ComposeAndRegister(manifest);
     }
 
-    public bool TrySelect(ulong runtimeId) => !_disposed && _host.TryActivate(runtimeId);
+    public bool TrySelect(ulong runtimeId) => !Volatile.Read(ref _disposed) && _host.TryActivate(runtimeId);
 
-    public bool Forget(ulong runtimeId) => !_disposed && _host.Registry.TryRemove(runtimeId);
+    public bool Forget(ulong runtimeId) => !Volatile.Read(ref _disposed) && _host.Registry.TryRemove(runtimeId);
 
     public bool TryGet(ulong runtimeId, out RuntimeAssembly? assembly)
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposed))
         {
             assembly = null;
             return false;
@@ -220,14 +241,21 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
 
     public ValueTask DisposeAsync()
     {
-        _disposed = true;
-        _catalog.Publish(new Dictionary<ulong, IMicroBundle>());
+        lock (_stateGate)
+        {
+            if (_disposed)
+                return ValueTask.CompletedTask;
+
+            Volatile.Write(ref _disposed, true);
+            _catalog.Publish(new Dictionary<ulong, IMicroBundle>());
+        }
+
         return ValueTask.CompletedTask;
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
+        if (Volatile.Read(ref _disposed))
             throw new ObjectDisposedException(nameof(RepositoryBackedCompositionSession));
     }
 
