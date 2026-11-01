@@ -11,7 +11,7 @@ The ServerApp manifest asks: *what server role should be provisioned, with what 
 
 ## Version 1 shape
 
-The first proof uses this JSON shape:
+The versioned machine-readable schema is [server-role-manifest.v1.schema.json](../schemas/server-role-manifest.v1.schema.json). The first proof uses this JSON shape:
 
 ```json
 {
@@ -35,7 +35,7 @@ The first proof uses this JSON shape:
 | `Resources.CpuCores` | Requested CPU core capacity; validation currently accepts 1–1024. |
 | `Resources.MemoryMiB` | Requested memory in MiB; validation currently accepts 64–1,048,576. |
 
-Unknown JSON properties are rejected. The first implementation also rejects missing/invalid identifiers, duplicate dependency names, unsupported schema versions, and out-of-range resource requests.
+Unknown JSON properties are rejected. The JSON Schema is the published structural contract; the runtime validator enforces the current implementation's supported version, identifier rules, duplicate-dependency rule, and resource bounds. The first implementation also rejects missing/invalid identifiers, duplicate dependency names, unsupported schema versions, and out-of-range resource requests.
 
 ## Provisioning boundary
 
