@@ -212,9 +212,9 @@ internal static class Program
         var repository = new TestArtifactRepository(rootArtifact, dependencyArtifact);
         var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
         {
-            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
                 rootAddress,
-                _ => new PinnedTestBundle(600, "1.0.0", loadOrder, new[] { (601UL, "2.0.0") })),
+                () => new PinnedTestBundle(600, "1.0.0", loadOrder, new[] { (601UL, "2.0.0") })),
             new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
                 dependencyAddress,
                 _ => new PinnedTestBundle(601, "2.0.0", loadOrder))
