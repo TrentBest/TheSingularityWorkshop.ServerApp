@@ -5,6 +5,9 @@ var checks = new (string Name, Func<Task> Run)[]
     ("version 1 JSON manifest parses", VersionOneJsonParses),
     ("unknown JSON properties are rejected", UnknownJsonPropertyIsRejected),
     ("valid manifest reaches ready through registered adapter", ValidManifestReachesReady),
+    ("dependencies require previously ready instances", DependenciesRequireReadyInstances),
+    ("ready instances satisfy declared dependencies", ReadyInstancesSatisfyDependencies),
+    ("duplicate instance activation is rejected", DuplicateInstanceActivationIsRejected),
     ("unsupported schema is rejected before activation", UnsupportedSchemaIsRejected),
     ("unknown role is not dynamically loaded", UnknownRoleIsRejected),
     ("duplicate dependencies are rejected", DuplicateDependenciesAreRejected),
@@ -137,4 +140,36 @@ sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
         ServerRoleManifest manifest,
         CancellationToken cancellationToken) =>
         ValueTask.FromResult(new RoleStartResult(true, "ready"));
+}
+
+
+static async Task DependenciesRequireReadyInstances()
+{
+    var manifest = ValidManifest() with { InstanceId = "dependent", Dependencies = ["identity-01"] };
+    var coordinator = new ProvisioningCoordinator([new ReadyAdapter("test.ready")]);
+    var result = await coordinator.ProvisionAsync(manifest);
+    Assert(result.State == ServerInstanceState.Failed &&
+           result.Detail.Contains("identity-01") && result.Detail.Contains("not Ready"),
+        "A missing ready dependency did not fail closed.");
+}
+
+static async Task ReadyInstancesSatisfyDependencies()
+{
+    var coordinator = new ProvisioningCoordinator([new ReadyAdapter("test.ready")]);
+    var dependency = ValidManifest() with { InstanceId = "identity-01" };
+    var dependent = ValidManifest() with { InstanceId = "social-01", Dependencies = ["identity-01"] };
+    var first = await coordinator.ProvisionAsync(dependency);
+    var second = await coordinator.ProvisionAsync(dependent);
+    Assert(first.IsReady && second.IsReady,
+        $"Expected dependency and dependent to become Ready; got {first.State}, {second.State}.");
+}
+
+static async Task DuplicateInstanceActivationIsRejected()
+{
+    var coordinator = new ProvisioningCoordinator([new ReadyAdapter("test.ready")]);
+    var first = await coordinator.ProvisionAsync(ValidManifest());
+    var second = await coordinator.ProvisionAsync(ValidManifest());
+    Assert(first.IsReady && second.State == ServerInstanceState.Failed &&
+           second.Detail.Contains("already registered or starting"),
+        "Duplicate instance activation was not rejected.");
 }
