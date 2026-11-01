@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Checkout Foundry workflow source (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: TrentBest/TheSingularityWorkshop.Foundry
+          ref: 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+          path: _deps/Foundry
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -22,6 +28,12 @@ jobs:
       - name: Build core and CLI
         run: |
           dotnet build src/ServerApp.Cli/ServerApp.Cli.csproj --configuration Release
-      - name: Run contract checks
+      - name: Build Foundry host integration
+        run: |
+          dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configuration Release
+      - name: Run core contract checks
         run: |
           dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
+      - name: Run Foundry host contract checks
+        run: |
+          dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release
