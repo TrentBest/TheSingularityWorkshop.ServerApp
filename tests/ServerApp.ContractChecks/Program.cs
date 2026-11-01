@@ -15,7 +15,10 @@ var checks = new (string Name, Func<Task> Run)[]
     ("batch plan orders dependencies deterministically", BatchPlanOrdersDependenciesDeterministically),
     ("batch plan rejects missing dependencies", BatchPlanRejectsMissingDependencies),
     ("batch plan rejects dependency cycles", BatchPlanRejectsCycles),
-    ("batch plan accepts explicitly ready external dependencies", BatchPlanAcceptsReadyExternalDependencies)
+    ("batch plan accepts explicitly ready external dependencies", BatchPlanAcceptsReadyExternalDependencies),
+    ("batch activation follows dependency order", BatchActivationFollowsDependencyOrder),
+    ("batch activation skips failed dependents but continues independent roles", BatchActivationSkipsFailedDependents),
+    ("invalid batch plan activates nothing", InvalidBatchPlanActivatesNothing)
 };
 
 var failures = new List<string>();
@@ -218,6 +221,53 @@ static Task BatchPlanAcceptsReadyExternalDependencies()
     return Task.CompletedTask;
 }
 
+
+static async Task BatchActivationFollowsDependencyOrder()
+{
+    var starts = new List<string>();
+    var coordinator = new ProvisioningCoordinator([new RecordingAdapter("test.ready", starts)]);
+    var batch = new BatchProvisioningCoordinator(coordinator);
+    var root = ValidManifest() with { InstanceId = "root" };
+    var child = ValidManifest() with { InstanceId = "child", Dependencies = ["root"] };
+    var result = await batch.ProvisionAsync([child, root]);
+    Assert(result.IsSuccessful && starts.SequenceEqual(["root", "child"]),
+        $"Batch did not activate in dependency order: {string.Join(", ", starts)}");
+}
+
+static async Task BatchActivationSkipsFailedDependents()
+{
+    var starts = new List<string>();
+    var coordinator = new ProvisioningCoordinator([
+        new SelectiveAdapter("test.ready", starts, "root")
+    ]);
+    var batch = new BatchProvisioningCoordinator(coordinator);
+    var manifests = new[]
+    {
+        ValidManifest() with { InstanceId = "root" },
+        ValidManifest() with { InstanceId = "child", Dependencies = ["root"] },
+        ValidManifest() with { InstanceId = "independent" }
+    };
+    var result = await batch.ProvisionAsync(manifests);
+    var states = result.Instances.ToDictionary(x => x.InstanceId, x => x.State);
+    Assert(!result.IsSuccessful &&
+           states["root"] == ServerInstanceState.Failed &&
+           states["child"] == ServerInstanceState.Skipped &&
+           states["independent"] == ServerInstanceState.Ready &&
+           starts.SequenceEqual(["independent", "root"]),
+        $"Failure propagation or independent activation was incorrect: {string.Join(", ", starts)}");
+}
+
+static async Task InvalidBatchPlanActivatesNothing()
+{
+    var starts = new List<string>();
+    var coordinator = new ProvisioningCoordinator([new RecordingAdapter("test.ready", starts)]);
+    var batch = new BatchProvisioningCoordinator(coordinator);
+    var invalid = ValidManifest() with { InstanceId = "dependent", Dependencies = ["missing"] };
+    var result = await batch.ProvisionAsync([invalid]);
+    Assert(!result.PlanAccepted && result.Instances.Count == 0 && starts.Count == 0,
+        "An invalid plan started one or more adapters.");
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
@@ -231,4 +281,26 @@ sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
         ServerRoleManifest manifest,
         CancellationToken cancellationToken) =>
         ValueTask.FromResult(new RoleStartResult(true, "ready"));
+}
+
+sealed class RecordingAdapter(string roleId, List<string> starts) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
+    {
+        starts.Add(manifest.InstanceId);
+        return ValueTask.FromResult(new RoleStartResult(true, "ready"));
+    }
+}
+
+sealed class SelectiveAdapter(string roleId, List<string> starts, string failedInstanceId) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
+    {
+        starts.Add(manifest.InstanceId);
+        return ValueTask.FromResult(new RoleStartResult(
+            manifest.InstanceId != failedInstanceId,
+            manifest.InstanceId == failedInstanceId ? "simulated failure" : "ready"));
+    }
 }
