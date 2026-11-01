@@ -11,7 +11,11 @@ var checks = new (string Name, Func<Task> Run)[]
     ("unsupported schema is rejected before activation", UnsupportedSchemaIsRejected),
     ("unknown role is not dynamically loaded", UnknownRoleIsRejected),
     ("duplicate dependencies are rejected", DuplicateDependenciesAreRejected),
-    ("invalid resource request is rejected", InvalidResourcesAreRejected)
+    ("invalid resource request is rejected", InvalidResourcesAreRejected),
+    ("batch plan orders dependencies deterministically", BatchPlanOrdersDependenciesDeterministically),
+    ("batch plan rejects missing dependencies", BatchPlanRejectsMissingDependencies),
+    ("batch plan rejects dependency cycles", BatchPlanRejectsCycles),
+    ("batch plan accepts explicitly ready external dependencies", BatchPlanAcceptsReadyExternalDependencies)
 };
 
 var failures = new List<string>();
@@ -159,6 +163,59 @@ static async Task DuplicateInstanceActivationIsRejected()
     Assert(first.IsReady && second.State == ServerInstanceState.Failed &&
            second.Detail.Contains("already registered or starting"),
         "Duplicate instance activation was not rejected.");
+}
+
+
+static Task BatchPlanOrdersDependenciesDeterministically()
+{
+    var manifests = new[]
+    {
+        ValidManifest() with { InstanceId = "z-root" },
+        ValidManifest() with { InstanceId = "child", Dependencies = ["z-root", "a-root"] },
+        ValidManifest() with { InstanceId = "m-root" },
+        ValidManifest() with { InstanceId = "a-root" }
+    };
+    var plan = ProvisioningPlanBuilder.Build(manifests);
+    var ids = plan.OrderedManifests.Select(m => m.InstanceId).ToArray();
+    Assert(plan.IsValid && ids.SequenceEqual(["a-root", "m-root", "z-root", "child"]),
+        $"Unexpected deterministic activation order: {string.Join(", ", ids)}");
+    return Task.CompletedTask;
+}
+
+static Task BatchPlanRejectsMissingDependencies()
+{
+    var manifest = ValidManifest() with
+    {
+        InstanceId = "social-01",
+        Dependencies = ["identity-404"]
+    };
+    var plan = ProvisioningPlanBuilder.Build([manifest]);
+    Assert(!plan.IsValid && plan.Errors.Any(e => e.Code == "plan.dependency.missing"),
+        "A dependency absent from the batch and ready set was not rejected.");
+    return Task.CompletedTask;
+}
+
+static Task BatchPlanRejectsCycles()
+{
+    var first = ValidManifest() with { InstanceId = "first", Dependencies = ["second"] };
+    var second = ValidManifest() with { InstanceId = "second", Dependencies = ["first"] };
+    var plan = ProvisioningPlanBuilder.Build([first, second]);
+    Assert(!plan.IsValid && plan.Errors.Any(e => e.Code == "plan.dependency.cycle"),
+        "A dependency cycle was not rejected.");
+    return Task.CompletedTask;
+}
+
+static Task BatchPlanAcceptsReadyExternalDependencies()
+{
+    var manifest = ValidManifest() with
+    {
+        InstanceId = "social-01",
+        Dependencies = ["identity-01"]
+    };
+    var plan = ProvisioningPlanBuilder.Build([manifest], ["identity-01"]);
+    Assert(plan.IsValid && plan.OrderedManifests.Single().InstanceId == "social-01",
+        "An explicitly Ready dependency outside the batch was not accepted.");
+    return Task.CompletedTask;
 }
 
 static void Assert(bool condition, string message)
