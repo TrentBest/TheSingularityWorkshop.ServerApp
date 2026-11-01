@@ -7,7 +7,7 @@
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
 - Active branch: `development`; `master` remains the starting baseline.
-- Current stage: founding fleet architecture captured; local manifest/placement proofs and a source-pinned Foundry workflow host integration are source-implemented. FSM_COS composition and production role hosting remain incomplete.
+- Current stage: local manifest/placement proofs and a source-pinned Foundry → FSM_COS → role-adapter workflow are source-implemented. The composed workflow has deterministic in-memory contract fixtures; trusted repository artifact delivery and a production server role host remain incomplete.
 - Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
 - Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
 - Performance hypotheses: rapid manifest-to-ready activation and an early 30% computational/energy savings estimate are goals/hypotheses, not verified claims.
@@ -19,20 +19,22 @@
 - `src/ServerApp.Cli`: local CLI with a non-networked `diagnostic.ready` adapter.
 - `examples/diagnostic-ready.serverapp.json`: sample manifest.
 - `tests/ServerApp.ContractChecks`: dependency-free Core contract checks.
-- `src/ServerApp.FoundryHost`: submits provisioning workflows to Foundry's real `WorkflowExecutionCoordinator` using an explicitly registered handler.
-- `tests/ServerApp.FoundryHost.ContractChecks`: verifies ready, not-ready failure, duplicate pending submission rejection, accepted-run cancellation, and cooperative cancellation while a role handler is running.
-- `.github/workflows/ci.yml`: checks out Foundry at exact commit `8bd3487a96af2cd7d667f62c4566a499bafe30dc`, builds the host integration, and runs both contract-check executables.
-- Verification status: source and CI workflow updated; the exact latest workflow result still needs confirmation. Do not call this CI-passed yet.
+- `src/ServerApp.FoundryHost/FoundryProvisioningHost.cs`: Core-only Foundry workflow fixture; `FoundryComposedProvisioningHost.cs` runs validate → FSM_COS compose → role activation through the actual Foundry coordinator.
+- `src/ServerApp.FoundryHost/ServerRoleRuntimeComposition.cs`: host-owned role-to-approved-root catalog, process-local runtime IDs, FSM_COS `RuntimeExperienceHost` composition handoff, and `IServerRoleRuntimeAdapter` contract.
+- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
+- `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, and MicroBundleDomain at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
+- Verification status: the first full-source CI run found a MicroBundleDomain sibling-directory naming mismatch. CI checkout path has been corrected; the latest exact workflow run still needs confirmation.
 
 ## Resume sequence
 
 1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
-2. Clone Foundry into `_deps/Foundry` at the exact pinned commit recorded in [Foundry Integration](FOUNDRY_INTEGRATION.md), then build/run the host integration contract checks.
-3. Verify the exact ServerApp CI run; fix compiler/test failures before expanding the integration.
-4. Implement the separate FSM_COS composition handoff and a real RuntimeAssembly-consuming role host; do not equate workflow success with runtime readiness.
-5. Add readiness/health contracts and idempotent instance reconciliation.
-6. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
-7. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
+2. Follow the five-repository pinned source checkout instructions in [Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
+3. Verify the latest exact ServerApp CI run; fix compiler/test failures before expanding the integration.
+4. Replace the in-memory MicroBundle catalog with a trusted repository-backed artifact resolver that separately proves retrieval, hash verification, and materialization.
+5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
+6. Add readiness/health contracts and idempotent instance reconciliation.
+7. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
+8. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
 
 ## Known constraints
 
