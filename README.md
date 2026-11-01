@@ -45,14 +45,22 @@ Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingu
 
 ## 🟢 05 — See it in a minute
 
-The first local provisioning slice is now source-added. With the .NET 8 SDK, run:
+The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 8 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-The sample uses an in-process diagnostic adapter; it opens no network port and does not prove distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) for the contract and limitations.
+To build and run the actual Foundry integration checks, first place Foundry at the exact source revision used by CI:
+
+```bash
+git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
+git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release
+```
+
+The diagnostic adapter and contract adapters are in-process fixtures; they open no network port and do not prove distributed hosting or FSM_COS composition. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 06 — Documentation and next steps
 
