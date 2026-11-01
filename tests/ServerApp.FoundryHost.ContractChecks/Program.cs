@@ -6,6 +6,7 @@ await SuccessfulRoleActivationIsAFoundryWorkflow();
 await FailedRoleActivationFailsTheFoundryWorkflow();
 await DuplicatePendingInstanceIsRejected();
 await AcceptedWorkflowCanBeCancelled();
+await RunningWorkflowCanBeCancelled();
 Console.WriteLine("All ServerApp Foundry host contract checks passed.");
 
 static async Task SuccessfulRoleActivationIsAFoundryWorkflow()
@@ -60,6 +61,21 @@ static async Task AcceptedWorkflowCanBeCancelled()
         "Foundry should record the accepted run as cancelled");
 }
 
+static async Task RunningWorkflowCanBeCancelled()
+{
+    var adapter = new BlockingRoleAdapter();
+    await using var host = new FoundryProvisioningHost(new[] { adapter });
+    var submission = host.Submit(CreateManifest("instance-running-cancel"));
+    var execution = host.StartAsync(submission.RunId);
+    await adapter.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+    Assert(host.Cancel(submission.RunId), "a running workflow should accept a cooperative cancellation request");
+    var result = await execution;
+    Assert(result.Status == WorkflowStatus.Cancelled, "Foundry should report the running workflow as cancelled");
+    Assert(host.GetSnapshot(submission.RunId).Status == WorkflowRunStatus.Cancelled,
+        "the retained Foundry snapshot should record cancellation");
+}
+
 static ServerRoleManifest CreateManifest(string instanceId) => new()
 {
     SchemaVersion = 1,
@@ -84,6 +100,21 @@ sealed class ReadyRoleAdapter : IServerRoleAdapter
     {
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(new RoleStartResult(true, "Contract fixture reports ready."));
+    }
+}
+
+sealed class BlockingRoleAdapter : IServerRoleAdapter
+{
+    public string RoleId => "contract.ready";
+    public TaskCompletionSource Started { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public async ValueTask<RoleStartResult> StartAsync(
+        ServerRoleManifest manifest, CancellationToken cancellationToken)
+    {
+        Started.TrySetResult();
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return new RoleStartResult(true, "The blocking fixture should not complete normally.");
     }
 }
 
