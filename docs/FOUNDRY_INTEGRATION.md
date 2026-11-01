@@ -3,7 +3,7 @@
 
 # Foundry Integration Boundary
 
-**Status: architecture selected; integration not yet implemented.** This document records the source-checked boundary for using Foundry as ServerApp's execution substrate. It is not evidence that ServerApp currently submits workflows to Foundry or activates a composed runtime.
+**Status: first workflow-host integration implemented; FSM_COS composition and production role activation remain unimplemented.** ServerApp now submits provisioning requests to the actual Foundry `WorkflowExecutionCoordinator` through `ServerApp.FoundryHost`. This proves Foundry owns the workflow lifecycle; it does not yet prove a composed MicroBundle runtime is started.
 
 ## 1. The three jobs are different
 
@@ -48,7 +48,7 @@ FSM_COS composition handler     ServerApp role host handler
                                   ServerApp operational state
 ```
 
-This is an ownership diagram, not a claim that these adapters currently exist. The composition handler and role host handler must be concrete, source-backed implementations before they are registered.
+The Foundry workflow host adapter and its provisioning handler now exist. The FSM_COS composition handler and a production RuntimeAssembly-consuming role host remain planned; the current role adapter contract is the existing ServerApp in-process activation seam.
 
 - **ServerApp.Core** remains independent of Foundry and FSM_COS. It owns operational manifests, dependency planning, capacity placement, and fleet lifecycle contracts.
 - **Foundry** owns workflow acceptance, sequential execution through explicitly registered handlers, run snapshots, cancellation, and structured workflow outcomes.
@@ -107,10 +107,11 @@ The first proof does not establish a distributed queue, durable cross-process wo
 - [x] Foundry selected as the mandatory workflow execution substrate.
 - [x] Actual Foundry and FSM_COS source boundaries inspected.
 - [x] ServerApp integration tracked in [issue #1](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/1).
-- [ ] Exact, reproducible source dependency strategy selected and verified.
-- [ ] Host integration project compiles against actual Foundry source.
-- [ ] FSM_COS composition handoff and role-host activation contracts implemented.
-- [ ] Deterministic end-to-end integration tests pass in CI against recorded source revisions.
+- [x] Exact Foundry source dependency pinned in CI and local build instructions.
+- [x] Host integration project calls the actual Foundry coordinator and registered-handler APIs.
+- [x] Contract checks cover ready, failed/not-ready, duplicate pending instance, and cancellation before start.
+- [ ] CI build/test result verified for the exact ServerApp commit and pinned Foundry revision.
+- [ ] FSM_COS composition handoff and RuntimeAssembly-consuming role-host contract implemented.
 - [ ] Runtime readiness is distinct from workflow completion in observable results.
 
 ---
