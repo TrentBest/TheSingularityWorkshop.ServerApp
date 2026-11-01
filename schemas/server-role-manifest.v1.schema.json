@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thesingularityworkshop.dev/schemas/server-role-manifest.v1.schema.json",
+  "title": "ServerApp Server Role Manifest",
+  "description": "Declarative request for one ServerApp server-role instance. This is distinct from an FSM_COS RuntimeManifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["SchemaVersion", "InstanceId", "RoleId", "Resources"],
+  "properties": {
+    "SchemaVersion": { "const": 1 },
+    "InstanceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "RoleId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "Dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "default": []
+    },
+    "Resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["CpuCores", "MemoryMiB"],
+      "properties": {
+        "CpuCores": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "MemoryMiB": { "type": "integer", "minimum": 64, "maximum": 1048576 }
+      }
+    }
+  }
+}
