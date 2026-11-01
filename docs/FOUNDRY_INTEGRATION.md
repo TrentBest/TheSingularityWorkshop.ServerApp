@@ -1,9 +1,9 @@
 <!-- The Singularity Workshop moniker -->
 <p align="center"><a href="https://github.com/TrentBest"><img src="https://raw.githubusercontent.com/TrentBest/TheSingularityWorkshop.Visualize/development/docs/assets/moniker.svg" alt="The Singularity Workshop animated moniker" width="720" /></a></p>
 
-# Foundry Integration Boundary
+# FSM_Foundry Integration Boundary
 
-**Status: source-pinned Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
+**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -72,12 +72,12 @@ The Foundry development source exposes:
 - `WorkflowRunner`: validates the complete definition before handler side effects, executes handlers sequentially, stops after failure, and reports structured outcomes.
 
 Source references:
-- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowDefinition.cs)
-- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowHandlerRegistry.cs)
-- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowExecutionContext.cs)
-- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowRunner.cs)
-- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
-- [Foundry architecture](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/docs/ARCHITECTURE.md)
+- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/src/Foundry.Workflow/WorkflowDefinition.cs)
+- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/src/Foundry.Workflow/WorkflowHandlerRegistry.cs)
+- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/src/Foundry.Workflow/WorkflowExecutionContext.cs)
+- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/src/Foundry.Workflow/WorkflowRunner.cs)
+- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [Foundry architecture](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry/blob/development/docs/ARCHITECTURE.md)
 
 MicroBundleRepository Core source exposes `IMicroBundleRepository.GetAsync` for complete immutable addresses, `IMicroBundleRepositoryObserver.ListAsync` for artifact inventory, `MicroBundleArtifactResolver.ResolveExact` for unambiguous ID/version-to-hash resolution, and `MicroBundleArtifact` whose constructor validates the SHA-256 of retrieved bytes. These are storage/identity contracts, not a transport server or executable loader.
 
@@ -105,20 +105,20 @@ Foundry, FSM_COS, MicroBundleDomain, and MicroBundleRepository Core are built fr
 
 | Repository | Commit |
 |---|---|
-| [Foundry](https://github.com/TrentBest/TheSingularityWorkshop.Foundry) | `8bd3487a96af2cd7d667f62c4566a499bafe30dc` |
+| [Foundry](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry) | `8bd3487a96af2cd7d667f62c4566a499bafe30dc` |
 | [FSM_COS](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS) | `cad5775fe55a6a8d0b6df8bbd22017c1179141c4` |
 | [FSM_API](https://github.com/TrentBest/FSM_API) | `4db572f5e0e74df028b01ee22fb393e2bd203eb6` |
 | [FSM_UserIO](https://github.com/TrentBest/FSM_UserIO) | `db5b59d0521a341f97e6077e3508eb2bd7171607` |
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
 | [MicroBundleRepository](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository) | `2b23967262766a0466b263e0838afbf8affd234b` |
 
-FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj`, `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`, and `_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
+FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/FSM_Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj`, `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`, and `_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
 For a local checkout from the ServerApp repository root:
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry.git _deps/FSM_Foundry
+git -C _deps/FSM_Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -155,7 +155,7 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; factories receive no artifact bytes, and downloaded bytes are never loaded as assemblies or scripts.
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
 - [x] CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with six exact source dependencies pinned.
-- [x] Core contract checks passed 23/23; the Foundry/FSM_COS/repository host contract-check executable passed.
+- [x] Core contract checks passed 23/23; the FSM_Foundry/FSM_COS/repository host contract-check executable passed.
 - [ ] Integrate a concrete persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
 - [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
 
