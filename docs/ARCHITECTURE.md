@@ -157,6 +157,12 @@ A first source implementation now exists under `src/ServerApp.Core` and `src/Ser
 
 A dependency-free contract-check executable is under `tests/ServerApp.ContractChecks`; GitHub Actions build/contract-check automation is defined in `.github/workflows/ci.yml`. These are source additions only until a workflow run or local build is observed. The first slice checks declared dependencies against previously Ready instance IDs in the same in-process coordinator. `ProvisioningPlanBuilder` validates closed batches, rejects missing/self/cyclic dependencies, and creates a deterministic topological order. `BatchProvisioningCoordinator` activates that order sequentially, skips dependents after prerequisite failure, and continues independent branches. These remain in-process proofs: they do not reserve hardware, persist instances, schedule across hosts, load arbitrary code, or create a production server. See [Server Role Manifest](SERVER_ROLE_MANIFEST.md).
 
+### 8.1 Deterministic host-capacity placement proof
+
+`HostPlacementPlanner` consumes the validated topological order and a supplied snapshot of host CPU/memory capacity. It uses stable first-fit placement across hosts ordered by ordinal HostId, accounts for already assigned resources, and returns remaining capacity plus any unplaced instances. Invalid host profiles or invalid manifest plans fail closed before placements are emitted.
+
+This is only an in-memory placement calculation. It does not reserve hardware, mutate host records, provision infrastructure, schedule distributed workloads, or account for GPU, network, storage, tenancy isolation, locality, or migration cost. Those signals belong in later measured scheduling contracts.
+
 ## 9. Maturity and open engineering questions
 
 Current status: **conceptual architecture / repository bootstrap**. This document records product direction, not implemented capabilities. No runnable server, API, authentication authority, token protocol, database, scheduler, rendering transport, deployment workflow, or production security posture is established yet.
