@@ -27,6 +27,8 @@ internal static class Program
         await RepositorySessionRejectsWrongArtifactIdentity();
         await RepositorySessionRejectsInvalidMaterialization();
         await RepositorySessionRejectsUnpinnedTransitiveDependencies();
+        await RepositorySessionCancellationDoesNotPublish();
+        await RepositorySessionDisposalWinsAgainstLatePreparation();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -455,6 +457,101 @@ internal static class Program
         }
 
         Assert(rejected, "repository-backed preparation must reject unpinned transitive dependencies");
+    }
+
+    private static async Task RepositorySessionCancellationDoesNotPublish()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("cancel during retrieval");
+        var address = CreateAddress(660, "1.0.0", bytes);
+        var artifact = new MicroBundleArtifact(address, bytes);
+        var repository = new BlockingArtifactRepository(artifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                address,
+                () => new PinnedTestBundle(660, "1.0.0", new List<ulong>()))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.cancel-preparation",
+            new[] { new MicroBundleManifestEntry(660, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+        using var cancellation = new CancellationTokenSource();
+
+        var preparation = session.PrepareAsync(cancellation.Token).AsTask();
+        await repository.RetrievalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        var cancelled = false;
+        try
+        {
+            await preparation.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+
+        Assert(cancelled, "cancellation during repository retrieval must abort preparation");
+        var compositionBlocked = false;
+        try
+        {
+            session.Compose(new RuntimeManifest(9060, new[] { new MicroBundleManifestEntry(660, "1.0.0") }));
+        }
+        catch (InvalidOperationException)
+        {
+            compositionBlocked = true;
+        }
+
+        Assert(compositionBlocked, "cancelled preparation must not publish a partial candidate catalog");
+    }
+
+    private static async Task RepositorySessionDisposalWinsAgainstLatePreparation()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("dispose during retrieval");
+        var address = CreateAddress(670, "1.0.0", bytes);
+        var artifact = new MicroBundleArtifact(address, bytes);
+        var repository = new BlockingArtifactRepository(artifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                address,
+                () => new PinnedTestBundle(670, "1.0.0", new List<ulong>()))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.dispose-during-preparation",
+            new[] { new MicroBundleManifestEntry(670, "1.0.0") });
+        var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var preparation = session.PrepareAsync(CancellationToken.None).AsTask();
+        await repository.RetrievalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await session.DisposeAsync();
+        repository.AllowRetrieval.TrySetResult(true);
+
+        var disposed = false;
+        try
+        {
+            await preparation.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (ObjectDisposedException)
+        {
+            disposed = true;
+        }
+
+        Assert(disposed, "a preparation completing after disposal must not publish into the disposed session");
+        var compositionRejected = false;
+        try
+        {
+            session.Compose(new RuntimeManifest(9070, new[] { new MicroBundleManifestEntry(670, "1.0.0") }));
+        }
+        catch (ObjectDisposedException)
+        {
+            compositionRejected = true;
+        }
+
+        Assert(compositionRejected, "a disposed session must reject composition after late preparation completes");
+        await session.DisposeAsync();
     }
 
     private static MicroBundleArtifactAddress CreateAddress(ulong bundleId, string version, byte[] bytes) =>
