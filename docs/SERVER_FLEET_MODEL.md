@@ -61,6 +61,12 @@ The Renderer may reduce server-side computation and network traffic by generatin
 
 The early estimate of 30% computational/energy savings is a hypothesis only. No savings claim should be published until representative, repeatable measurements establish the baseline and isolate the contribution of each optimization.
 
+## Initial host-capacity placement proof
+
+`HostPlacementPlanner` accepts a batch of validated role manifests and a snapshot of host CPU/memory capacities. It uses the deterministic dependency order from `ProvisioningPlanBuilder`, then applies stable first-fit placement across hosts sorted by ordinal `HostId`. Each placement consumes CPU cores and memory MiB from a private in-memory ledger; remaining capacity is returned with the placement. Manifests that cannot fit are reported as unplaced while other instances may still be placed.
+
+Invalid or duplicate host profiles and invalid manifest/dependency plans reject the placement plan before any placements are produced. The planner does not mutate caller-supplied host profiles, reserve real hardware, enforce isolation, inspect GPU/network/storage capabilities, or start workloads. This is a deterministic resource-accounting proof—not a live scheduler.
+
 ## Principles to preserve
 
 1. Separate Experience semantics, Domain facade/policy, server role, and manifest.
