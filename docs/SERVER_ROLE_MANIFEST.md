@@ -31,7 +31,7 @@ The versioned machine-readable schema is [server-role-manifest.v1.schema.json](.
 | `SchemaVersion` | Required schema version. The first implementation accepts only 1. |
 | `InstanceId` | Caller-assigned identity for this requested instance. |
 | `RoleId` | Stable role key resolved against an explicitly registered adapter. |
-| `Dependencies` | Declared prerequisite identifiers. Resolution/ordering is not implemented in this first slice. |
+| `Dependencies` | Instance IDs that must already be `Ready` in the same in-process coordinator before this instance can start. These are server-instance dependencies, not MicroBundle dependencies. |
 | `Resources.CpuCores` | Requested CPU core capacity; validation currently accepts 1–1024. |
 | `Resources.MemoryMiB` | Requested memory in MiB; validation currently accepts 64–1,048,576. |
 
@@ -59,10 +59,12 @@ The initial local coordinator performs these steps:
 
 1. Validate the manifest.
 2. Resolve `RoleId` only against an adapter registered by the host.
-3. Invoke that adapter with the manifest and cancellation token.
-4. Report `Ready` only when the adapter explicitly reports readiness; otherwise report `Failed`.
+3. Require every declared dependency instance ID to be registered as `Ready` in this coordinator.
+4. Reject duplicate instance activation while an instance is starting or after it is ready.
+5. Invoke the adapter with the manifest and cancellation token.
+6. Register the instance as `Ready` only when the adapter explicitly reports readiness; otherwise report `Failed`.
 
-The manifest cannot name an assembly, executable, shell command, URL, or arbitrary code payload. There is no dynamic code loading, network listener, distributed placement, dependency resolver, persistent registry, or hardware resource reservation in this proof.
+The manifest cannot name an assembly, executable, shell command, URL, or arbitrary code payload. There is no dynamic code loading, network listener, distributed placement, topological batch planner, persistent registry, or hardware resource reservation in this proof. Dependencies are checked against previously Ready instances in the same coordinator process; they are not fetched, started, or ordered automatically.
 
 ## Role adapter contract
 
@@ -79,13 +81,13 @@ dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnost
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-The contract-check executable uses no third-party test packages. It checks successful activation, unsupported schema rejection, unknown-role fail-closed behavior, duplicate dependencies, and invalid resource bounds.
+The contract-check executable uses no third-party test packages. It checks successful activation, unsupported schema rejection, unknown-role fail-closed behavior, duplicate dependencies, invalid resource bounds, dependency readiness, and duplicate instance activation.
 
 ## Status and next contract decisions
 
-**Source-added, not yet build-verified in this environment.** The implementation is a first local proof, not yet a production manifest contract.
+**Source-added; GitHub Actions build and contract checks have passed.** The implementation is a first local proof, not yet a production manifest contract.
 
-The next design steps are to define dependency semantics (service dependency versus MicroBundle dependency), resource units/limits and actual reservation, manifest provenance/signature and authorization, idempotency/reconciliation, adapter lifecycle and health, and the separation between requested capacity and measured capacity. Distributed placement should wait until the local lifecycle contract is stable.
+The current dependency contract treats each dependency as a previously Ready server instance ID. The next design steps are batch/topological dependency planning, dependency lifecycle behavior when a prerequisite becomes unhealthy, resource units/limits and actual reservation, manifest provenance/signature and authorization, durable idempotency/reconciliation, adapter lifecycle and health, and the separation between requested capacity and measured capacity. Distributed placement should wait until the local lifecycle contract is stable.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
