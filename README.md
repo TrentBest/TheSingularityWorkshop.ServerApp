@@ -25,11 +25,11 @@ These roles have different security, state, scaling, and resource requirements. 
 
 | System | Responsibility |
 |---|---|
-| FSM_COS | Runtime composition from a host-supplied catalog. |
+| FSM_COS | Runtime composition from a host-supplied catalog; returns RuntimeAssembly to its host. |
 | FSM_API | State/context and process-group execution primitives. |
 | AnyApp | Desktop host and presentation. |
 | WebApp | Browser-facing host and presentation. |
-| ServerApp | Server-role provisioning, hosting, fleet operations, and bounded routing. |
+| ServerApp | Server-role provisioning, hosting, fleet operations, and bounded routing. |\n| Foundry | Selected execution substrate: validates and runs explicit host-registered workflows, owns workflow lifecycle and outcomes. ServerApp integration is tracked but not yet implemented. |
 | Renderer | Visual output representation and potential reduction of server computation/traffic. |
 | Domains | External identity/facade and policy for Experiences. |
 | Experiences | Interactive content and runtime state. |
@@ -55,7 +55,7 @@ The sample uses an in-process diagnostic adapter; it opens no network port and d
 
 ## 🟪 06 — Documentation and next steps
 
-- [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
+- [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.\n- [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
