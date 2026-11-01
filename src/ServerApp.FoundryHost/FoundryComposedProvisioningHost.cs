@@ -184,7 +184,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         }
     }
 
-    private ValueTask ComposeAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
+    private async ValueTask ComposeAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = GetOperation(context);
@@ -193,19 +193,31 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
 
         try
         {
-            state.Assembly = _composer.Compose(definition);
+            state.Session = _composer.CreateSession(definition);
+            state.Assembly = _composer.Compose(state.Session, definition);
             cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.CompletedTask;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (state.Assembly is not null)
-                _composer.Forget(state.Assembly.RuntimeId);
+                state.Session?.Forget(state.Assembly.RuntimeId);
+            if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+            state.Assembly = null;
             throw;
         }
         catch (Exception exception)
         {
             state.Result = Failed(state.Manifest, $"FSM_COS composition failed: {exception.GetType().Name}: {exception.Message}");
+            if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+            state.Assembly = null;
             throw;
         }
     }
@@ -219,8 +231,10 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!_composer.TrySelect(assembly.RuntimeId))
-                throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by the host registry.");
+            var session = state.Session
+                ?? throw new InvalidOperationException("The candidate composition session is no longer available.");
+            if (!session.TrySelect(assembly.RuntimeId))
+                throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by its candidate registry.");
 
             var adapter = _adapters[state.Manifest.RoleId];
             var start = await adapter.StartAsync(state.Manifest, assembly, cancellationToken).ConfigureAwait(false);
@@ -236,14 +250,20 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            _composer.Forget(assembly.RuntimeId);
+            state.Session?.Forget(assembly.RuntimeId);
+            if (state.Session is not null)
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+            state.Session = null;
             state.Assembly = null;
             state.Result = Cancelled(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
             throw;
         }
         catch (Exception exception)
         {
-            _composer.Forget(assembly.RuntimeId);
+            state.Session?.Forget(assembly.RuntimeId);
+            if (state.Session is not null)
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+            state.Session = null;
             state.Assembly = null;
             state.Result = Failed(state.Manifest, $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
             throw;
@@ -283,12 +303,24 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         new(manifest.InstanceId, manifest.RoleId, ServerInstanceState.Cancelled,
             detail, Array.Empty<ManifestValidationError>());
 
-    public ValueTask DisposeAsync() => _workflows.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _workflows.DisposeAsync().ConfigureAwait(false);
+        foreach (var state in _operations.Values)
+        {
+            if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+        }
+    }
 
     private sealed class OperationState(ServerRoleManifest manifest)
     {
         public ServerRoleManifest Manifest { get; } = manifest;
         public ServerRoleCompositionDefinition? Definition { get; set; }
+        public IServerRoleCompositionSession? Session { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }
     }
