@@ -164,7 +164,7 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Add an explicitly rooted local filesystem MicroBundleRepository adapter for development composition sessions; Core retrieval and inventory are supplied by the same repository instance.
 - [ ] Select and integrate a production persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
 - [x] Expose a host-owned lifecycle handle and drain/stop operations for successfully activated lifecycle-capable roles; contract-test drain-before-stop, retry after transient stop failure, idempotent repeated stop, and exactly-once post-stop cleanup.
-- [ ] Replace the fixture role adapter with a real server role process and production supervision contract.
+- [ ] Replace the in-process fixture adapter with a real supervised server-role process and production operational guarantees; tracked in [issue #7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7).
 
 
 ---
