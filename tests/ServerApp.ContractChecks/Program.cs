@@ -18,7 +18,10 @@ var checks = new (string Name, Func<Task> Run)[]
     ("batch plan accepts explicitly ready external dependencies", BatchPlanAcceptsReadyExternalDependencies),
     ("batch activation follows dependency order", BatchActivationFollowsDependencyOrder),
     ("batch activation skips failed dependents but continues independent roles", BatchActivationSkipsFailedDependents),
-    ("invalid batch plan activates nothing", InvalidBatchPlanActivatesNothing)
+    ("invalid batch plan activates nothing", InvalidBatchPlanActivatesNothing),
+    ("host placement is deterministic and accounts for capacity", HostPlacementIsDeterministic),
+    ("host placement reports insufficient capacity", HostPlacementReportsInsufficientCapacity),
+    ("host placement rejects duplicate host identifiers", HostPlacementRejectsDuplicateHosts)
 };
 
 var failures = new List<string>();
@@ -266,6 +269,57 @@ static async Task InvalidBatchPlanActivatesNothing()
     var result = await batch.ProvisionAsync([invalid]);
     Assert(!result.PlanAccepted && result.Instances.Count == 0 && starts.Count == 0,
         "An invalid plan started one or more adapters.");
+}
+
+
+static Task HostPlacementIsDeterministic()
+{
+    var manifests = new[]
+    {
+        ValidManifest() with { InstanceId = "second", Resources = new ResourceRequirements { CpuCores = 2, MemoryMiB = 256 } },
+        ValidManifest() with { InstanceId = "first", Resources = new ResourceRequirements { CpuCores = 1, MemoryMiB = 128 } }
+    };
+    var hosts = new[]
+    {
+        new HostCapacityProfile("host-b", 4, 1024),
+        new HostCapacityProfile("host-a", 4, 1024)
+    };
+    var result = HostPlacementPlanner.Build(manifests, hosts);
+    Assert(result.IsFullyPlaced &&
+           result.Placements.Select(p => p.HostId).SequenceEqual(["host-a", "host-a"]) &&
+           result.Placements[0].RemainingCpuCores == 3 &&
+           result.Placements[1].RemainingCpuCores == 1 &&
+           hosts[1].CpuCores == 4,
+        "Placement order, capacity accounting, or input immutability was incorrect.");
+    return Task.CompletedTask;
+}
+
+static Task HostPlacementReportsInsufficientCapacity()
+{
+    var manifest = ValidManifest() with
+    {
+        Resources = new ResourceRequirements { CpuCores = 3, MemoryMiB = 512 }
+    };
+    var result = HostPlacementPlanner.Build([manifest],
+        [new HostCapacityProfile("small-host", 2, 256)]);
+    Assert(result.PlanAccepted && !result.IsFullyPlaced &&
+           result.Placements.Count == 0 &&
+           result.UnplacedInstances.Single().InstanceId == manifest.InstanceId,
+        "Insufficient host capacity was not reported as an unplaced instance.");
+    return Task.CompletedTask;
+}
+
+static Task HostPlacementRejectsDuplicateHosts()
+{
+    var hosts = new[]
+    {
+        new HostCapacityProfile("duplicate", 4, 1024),
+        new HostCapacityProfile("duplicate", 8, 2048)
+    };
+    var result = HostPlacementPlanner.Build([ValidManifest()], hosts);
+    Assert(!result.PlanAccepted && result.Errors.Any(e => e.Code == "placement.host.duplicate"),
+        "Duplicate host identifiers were accepted.");
+    return Task.CompletedTask;
 }
 
 static void Assert(bool condition, string message)
