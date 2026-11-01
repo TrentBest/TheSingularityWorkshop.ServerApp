@@ -40,7 +40,7 @@ See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_
 
 ## 🟢 04 — Fleet Observatory
 
-The static [ServerApp Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) presents the manifest contract, provisioning lifecycle, and verified evidence. It is a documentation surface—not a live fleet dashboard.
+Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/). Experiment with host counts, CPU and memory budgets, workload profiles, and first-fit placement. The browser simulation is illustrative; the linked source and CI runs provide the implementation evidence. It does not connect to or provision real hosts.
 
 ## 🟢 05 — See it in a minute
 
