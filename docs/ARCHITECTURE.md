@@ -1,77 +1,171 @@
 <!-- The Singularity Workshop moniker -->
 <p align="center"><a href="https://github.com/TrentBest"><img src="https://raw.githubusercontent.com/TrentBest/TheSingularityWorkshop.Visualize/development/docs/assets/moniker.svg" alt="The Singularity Workshop animated moniker" width="720" /></a></p>
 
-# ServerApp Architecture and Open Decisions
+# ServerApp Architecture
 
 ## 1. Purpose
 
-ServerApp is the Workshop's server-side host initiative. Its purpose is not yet sufficiently specified to justify a concrete API, service topology, persistence layer, or remote execution protocol. This document establishes the known architectural constraints and makes the missing product decision visible before implementation hardens an assumption.
+ServerApp is the Workshop's **manifest-driven server fleet and host platform**. It is intended to turn a declared computational role and its dependencies into a provisioned, observable server capability, using available hardware and the Workshop runtime rather than requiring each server role to be engineered as a bespoke application.
 
-The guiding rule is: **server concerns belong in the server host; shared application semantics and composition remain in their owning domains.**
+The target is rapid, repeatable provisioning: provide a validated manifest, resolve its dependencies and resource requirements, place it on suitable capacity, activate it, and report readiness. "Instantaneous" is a design aspiration to quantify, not a performance claim. Startup, placement, warm-pool reuse, dependency readiness, and time-to-first-use must be measured independently.
 
-## 2. Neighboring systems and ownership
+ServerApp is not one monolithic backend. It coordinates a fleet of distinct server roles with explicit ownership and trust boundaries.
 
-| System | Established responsibility | ServerApp implication |
-|---|---|---|
-| FSM_COS | Resolves and validates a host-supplied MicroBundle catalog, composes dependencies, performs bounded arbitration, and returns a RuntimeAssembly. | Consume its composition contract where server-host composition is required; do not reimplement it. |
-| AnyApp | Windows desktop host; owns desktop input and presentation around the Workshop runtime. | Reuse host-neutral contracts where appropriate; do not depend on the WPF executable as a server library. |
-| WebApp | Browser-facing host; owns browser input, browser capabilities, and web presentation. It is not a desktop proxy. | Treat WebApp as a sibling host/client boundary, not automatically as a backend that ServerApp must serve. |
-| FSM_API | State/context and process-group execution primitives. | Do not invent a competing semantic lifecycle or heartbeat. Identify the canonical execution owner before implementing remote progress. |
-| MicroBundleDomain / repository contracts | Define MicroBundle identity/contracts and artifact/catalog responsibilities in their respective domains. | Preserve immutable identity and trust boundaries; do not turn ServerApp into an artifact loader without an explicit materialization contract. |
+## 2. System responsibilities
 
-## 3. Candidate role models — not yet selected
+| System | Established or intended responsibility |
+|---|---|
+| FSM_COS | Composition kernel: resolves/validates a host-supplied MicroBundle catalog, composes dependencies, performs bounded arbitration, and returns a RuntimeAssembly. |
+| FSM_API | State/context and process-group execution primitives. Do not create a competing semantic tick or heartbeat. |
+| AnyApp | Desktop host and desktop presentation. |
+| WebApp | Browser-facing host and browser presentation; independent of desktop AnyApp. |
+| ServerApp | Server fleet provisioning, role hosting, routing/coordination boundaries, capacity placement, and server operational lifecycle. |
+| Renderer | Reduce the amount of server-side work required to communicate visual state; exact protocol and ownership must be proven against the Renderer implementation. |
+| Domains | Provide external-facing domain facades for Experiences, including creator-selected presentation such as a shop-like facade. A domain is not merely a server address. |
+| Experience | The hosted interactive content/stateful world. It must remain distinct from the infrastructure that hosts it. |
 
-These are mutually distinguishable product shapes, not implemented features:
+## 3. Server fleet model
 
-### A. Server as an independent host
+Server roles are independently defined and may be deployed separately, co-located when safe, or scaled horizontally. The following is the current product vision, not a claim that these services exist yet.
 
-ServerApp is a headless host manifestation. It accepts an explicit application/Experience request, validates the request and artifact identity, supplies the appropriate catalog/configuration to FSM_COS, and then delegates execution to the canonical runtime owner. It exposes bounded results and status over an authenticated protocol. It must define session ownership, resource limits, cancellation, concurrency, and isolation.
+### 3.1 Landing-experience hosts
 
-### B. Server as supporting services
+A landing host serves the player's entry experience and the transfer points to other experiences. The default presentation may be a garden, but the landing experience is not restricted to that aesthetic. A maze, for example, could make players navigate to discover its gates or portals.
 
-ServerApp provides server-owned capabilities such as identity/session services, data access, artifact discovery, or coordination to other hosts. It does not itself become the owner of Experience execution. Each service has an explicit API, data owner, authorization policy, and operational lifecycle.
+A valid landing experience must clearly denote and provide interactable access to these required destinations:
 
-### C. Deliberately separated host and service layers
+- **Social**
+- **Settings**
+- **Hangouts**
+- **Exit**
+- **Domains**
+- **Workshop**
 
-A server host and supporting services coexist only where the boundaries are independently useful and testable. They must not become a single undifferentiated backend. The service interfaces, trust boundaries, and deployment units remain explicit.
+These are semantic destinations, not necessarily six fixed visual buttons. They must be discoverable and operable as interactables in the experience. A maze or other creative layout may change how players find them, but may not silently omit or make required destinations inaccessible. Each transfer point changes the active experience/context through an explicit transition contract.
 
-No option is selected by this document. The owner must confirm the intended role before the first production-facing contract is established.
+Landing hosts may host many landing experiences when their measured resource profiles fit. Additional hosts are provisioned and traffic redistributed when capacity or latency targets require it.
 
-## 4. Non-negotiable boundaries
+### 3.2 Small dedicated platform services
 
-- FSM_COS remains the composition kernel; a successful composition result is not proof that an Experience is executing.
-- The host supplies its catalog and owns application execution, lifecycle, delivery, and presentation unless a separately documented runtime owner says otherwise.
-- ServerApp must not create a second FSM_COS or an independent semantic clock.
-- WebApp and AnyApp remain independently meaningful host manifestations; do not require a desktop AnyApp process for ordinary web/server operation.
-- Browser-originated requests are untrusted input. Never expose arbitrary shell/process execution, arbitrary filesystem access, unrestricted assembly loading, or unrestricted local-network access as a convenience API.
-- Preserve artifact identity as BundleId + Version + ContentHash where published MicroBundle artifacts are involved. Retrieval, hash validation, trusted materialization, and composition are separate stages and must be evidenced separately.
-- Distinguish requested, accepted, authorized, composed, running, completed, failed, and disconnected states. An HTTP success or composition success must not be mislabeled as runtime success.
+The vision includes separately rentable, low-cost service roles such as:
 
-## 5. First proof sequence after role selection
+- Settings server
+- Social server
+- Hangouts server
+- Chat server
+- Private-business server
 
-1. Write the server's one-sentence product purpose and explicit non-goals.
-2. Define one request/response contract with versioning, authentication, authorization, validation, and bounded payload/resource limits.
-3. Implement one vertical slice with deterministic tests and observable failure paths.
-4. Prove the selected runtime/composition boundary against the actual current source APIs; do not infer it from diagrams.
-5. Add operational health/readiness, structured diagnostics, and cancellation only where the first slice needs them.
-6. Document local execution and the evidence/revision for every claimed capability.
+These roles should have small, explicit contracts and resource profiles. A low monthly rental is a product goal, not a current price or cost guarantee. Co-location is permitted only when isolation, security, availability, and resource contention remain acceptable.
 
-Deployment topology, durable storage, multi-tenancy, remote MicroBundle materialization, and production exposure remain out of scope until a concrete requirement selects them.
+### 3.3 Workshop and Singularity Central Station
 
-## 6. Verification and maturity
+The Workshop is envisioned as an entangled, persistent set of server domains. Singularity Central Station is its navigation/coordination hub: each platform is presented as a train leading to a specific domain. The station and its domains are themselves persistent and entangled rather than disposable landing pages.
 
-Current status: **conceptual / repository bootstrap**. No runnable server, endpoint, authentication scheme, database, deployment workflow, or production security claim is established by the repository's initial source. Each future claim must be classified as conceptual, source-checked, or verified against a named revision and test/run path.
+This requires explicit identity, domain discovery, authorization, persistence ownership, and transition semantics. The train metaphor is presentation; the underlying platform/domain contract must remain machine-readable and stable.
 
-## 7. Open decision for the owner
+### 3.4 Domain facades
 
-Which is the intended first identity of ServerApp?
+Domains expose the external facade for Experiences. A creator can select a facade style permitted by the domain—for example, a shop-like presentation. The domain governs what facade capabilities are available and how an Experience is discovered or entered.
 
-- an independent headless host that can compose and run a server-side Experience;
-- server-side services that WebApp/AnyApp consume, without owning Experience execution; or
-- a deliberately separated combination of both?
+Keep these concepts separate:
+- Experience: the interactive content and its runtime state.
+- Domain: the externally visible identity, policy, and facade.
+- Host/server: the compute and service capacity running the relevant workload.
+- Manifest: the declared role, dependencies, configuration, and resource requirements used to provision it.
 
-This decision determines the first API, runtime owner, session model, and security architecture. Do not choose implicitly.
+### 3.5 Authentication and client communication path
 
+The proposed login path deliberately separates credential intake, authentication, and ongoing client traffic:
+
+1. A **login/broker server** receives the client's login request and forwards the necessary request data to the authentication authority over a protected service-to-service channel.
+2. The **authentication server** validates credentials and policy. The broker must not become a second authentication authority or make approval decisions itself.
+3. On approval, the authentication authority issues or authorizes a scoped token. The client receives the token and the permitted communication endpoint/channel details through a defined secure protocol.
+4. The client connects to a **client I/O gateway** dedicated to processing inbound and outbound client messages.
+5. The gateway routes messages to the responsible experience or platform service based on authenticated identity, session, domain, and workload ownership. It acts as a bounded message intermediary—not as an arbitrary command relay.
+
+Token format, lifetime, audience, revocation, transport, channel negotiation, and service-to-service authentication are open security design items. Never forward raw credentials broadly or trust client-supplied routing claims.
+
+The client I/O gateway can scale horizontally so client communication does not bottleneck on a single process. Gateway scaling and Experience compute scaling are separate dimensions.
+
+### 3.6 Persistent-universe and Experience compute fleet
+
+Persistent universes and MMORPG-like Experiences may require multiple compute hosts. ServerApp should provision enough capacity for current demand, distribute players/workloads, and avoid concentrating too many players in one simulation area or process.
+
+The scheduler should consider more than total player count: spatial density, interaction locality, simulation cost, latency, state ownership, memory, CPU/GPU capability, and migration cost may all matter. Splitting a world across hosts introduces consistency, handoff, authority, and network-boundary problems that must be designed explicitly.
+
+A server may host multiple Experiences when their combined measured profiles fit within its resource and isolation budgets. Otherwise, ServerApp should place or activate another host and distribute work. Scale-out and scale-in policies, warm pools, and minimum capacity are future measurable decisions.
+
+### 3.7 Rendering and delta-delivery servers
+
+A rendering-server role is envisioned to generate image frames, compare successive frames, and transmit a delta when its encoded representation is smaller than sending the complete image. The decision must include framing, compression, transport overhead, decode cost, and recovery/keyframe rules; comparing raw pixel differences alone is not enough.
+
+Renderer is expected to reduce the work the server must perform and/or transmit. This is a promising architectural advantage, but its exact savings must be measured against a defined baseline and workload. Rendering, simulation, and client I/O should be separable roles so they can scale independently when evidence supports it.
+
+## 4. Manifest-driven provisioning
+
+The central operating model is:
+
+1. Receive a role manifest.
+2. Validate its schema, signature/provenance, authorization, version, and policy.
+3. Resolve required MicroBundles, service dependencies, hardware capabilities, and resource constraints.
+4. Select a host or capacity pool.
+5. Materialize only trusted, verified artifacts; preserve BundleId + Version + ContentHash identity.
+6. Compose through FSM_COS where composition is required.
+7. Start the role through its declared host/runtime adapter.
+8. Establish health/readiness and register the instance with routing/discovery.
+9. Scale, drain, migrate, or retire it according to explicit policy.
+
+The manifest must be declarative and bounded. It describes an approved role and configuration; it must not be an unrestricted shell script or arbitrary code-loading escape hatch. Artifact retrieval, hash validation, trusted materialization, composition, and execution are separate stages with separate evidence.
+
+The intended experience is that adding a new capability is primarily a matter of supplying a validated manifest and satisfying its declared dependencies—not weeks of bespoke server engineering. The platform still needs reusable role adapters, security policy, compatible artifacts, capacity, and operational controls. Provisioning latency must be benchmarked from request acceptance through readiness.
+
+## 5. Hardware proximity and efficiency hypothesis
+
+The design goal is to place computation as close to the server hardware as practical while preserving portability, isolation, and safety. Manifests and scheduling should expose capability requirements so the fleet can select suitable CPU, memory, storage, network, and accelerator resources without embedding hardware-specific assumptions into Experience semantics.
+
+An early estimate of **30% computational/energy savings** has been proposed for the Workshop technology. This is an unverified hypothesis, not a measured result or commitment. Validation requires representative workloads, a documented baseline, equivalent output/quality, repeatable runs, and separate reporting of compute, memory, network, and energy. Renderer-driven reductions should be measured independently from other optimizations.
+
+## 6. Architectural invariants
+
+- FSM_COS remains the composition kernel. Composition success does not prove a workload is running or healthy.
+- FSM_API remains the state/context/process-group primitive; do not invent a second semantic clock.
+- ServerApp provisions and operates server roles; it does not absorb every service into one process or own semantics that belong to Experience, Domain, Renderer, or other packages.
+- AnyApp, WebApp, and ServerApp are distinct host manifestations with explicit contracts; WebApp must not require a desktop AnyApp process.
+- Preserve artifact identity as BundleId + Version + ContentHash. Verify provenance and content before materialization or composition.
+- Treat all client input as untrusted. Enforce authentication, authorization, bounded payloads, rate/resource limits, and explicit routing.
+- Distinguish requested, accepted, authenticated, authorized, placed, composed, starting, ready, running, draining, completed, failed, and disconnected states where applicable.
+- Co-location is a scheduler decision constrained by measured capacity and isolation—not an assumption that all roles should share one server.
+- Do not claim persistence, horizontal scaling, migration, automatic provisioning, or energy savings until implemented and tested.
+
+## 7. First proof sequence
+
+The first executable slice should prove the platform's differentiator without prematurely implementing the whole fleet:
+
+1. Define a versioned, validated **server-role manifest** with a narrow initial role and explicit resource/dependency declarations.
+2. Build a local provisioning path that validates the manifest, resolves a known role adapter, starts it, and reports readiness/failure.
+3. Demonstrate a second instance or role can be provisioned from a separate manifest without bespoke host code.
+4. Add resource accounting and a deterministic placement decision before attempting distributed scheduling.
+5. Add authenticated service registration and bounded message routing as a separate vertical slice.
+6. Only then prove horizontal scale-out and client routing across multiple instances.
+7. Add performance/energy benchmarks, including a Renderer delta-delivery comparison, with a documented baseline.
+
+The first role should be selected to minimize external dependencies while proving manifest-to-ready behavior. Do not begin with production authentication, a persistent MMORPG, or a full fleet scheduler as one indivisible milestone.
+
+## 8. Maturity and open engineering questions
+
+Current status: **conceptual architecture / repository bootstrap**. This document records product direction, not implemented capabilities. No runnable server, API, authentication authority, token protocol, database, scheduler, rendering transport, deployment workflow, or production security posture is established yet.
+
+Key questions to resolve through design and small proofs:
+- What is the first manifest schema and versioning/compatibility policy?
+- Which role adapter is the first proof?
+- What is the authoritative identity/session service and token trust model?
+- What is the state ownership and handoff model for persistent Experiences?
+- Which scheduling signals and SLOs govern placement and scale-out?
+- What is the Renderer frame/delta wire format and keyframe/recovery behavior?
+- What isolation boundary is required between tenants and co-located roles?
+- What are the measured startup, readiness, throughput, latency, and energy targets?
+
+The owner retains control over release, NuGet publication, production deployment, and public exposure. No such authorization is implied by this architecture.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
