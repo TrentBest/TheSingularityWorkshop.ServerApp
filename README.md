@@ -3,47 +3,53 @@
 
 # ✳️ 00 ServerApp
 
-**ServerApp is the Workshop's server-side host initiative.** It is being established alongside [AnyApp](https://github.com/TrentBest/AnyApp) and [WebApp](https://github.com/TrentBest/TheSingularityWorkshop.WebApp), with [FSM_COS](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS) providing the composition boundary where appropriate.
+**ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
-This repository is in its birth stage. The current source does not yet establish a runnable server, API contract, persistence model, deployment topology, or production security posture. This README intentionally describes the architectural investigation rather than claiming those capabilities exist.
+This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No runnable server, public endpoint, authentication service, scheduler, persistence system, or deployment workflow is claimed here.
 
 This document follows the Workshop's [Documentation Standard](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/master/DOCUMENTATION_STANDARD.md). See [Agent Onboarding](AGENTS.md) before contributing.
 
 ## 🟦 01 — What is ServerApp?
 
-ServerApp is intended to provide a server-side manifestation of the Workshop's application architecture. Its exact responsibility boundary is being established: it must be clear whether it is an independently hosted server application that composes/executes Experiences, a set of server services consumed by other hosts, or a deliberately separated combination of those roles.
+ServerApp is intended to make server capabilities declarative and repeatable. A validated manifest describes a server role, dependencies, configuration, and resource requirements. ServerApp should resolve trusted artifacts, select capacity, activate the role, and report readiness.
 
-That decision matters. A server host, an API gateway, an artifact repository, and a remote execution service are different products with different trust, lifecycle, and operational responsibilities. They should not be collapsed into one generic "backend" without an explicit contract.
+The long-term target is to bring a required server role online as quickly as practical without bespoke engineering for every deployment. Startup and readiness latency must be measured; "instantaneous" is an engineering goal, not a current guarantee.
 
-## 🟣 02 — Why establish it separately?
+## 🟣 02 — Why a fleet of distinct roles?
 
-The desktop and browser hosts have different native capabilities and presentation surfaces. A server manifestation has a different set of concerns: network trust boundaries, authenticated requests, service lifecycle, concurrency, durable state, observability, and deployment. Those concerns should be designed as server responsibilities rather than leaking into shared Experience semantics or FSM_COS composition.
+The Workshop vision includes landing-experience hosts, settings/social/hangouts/chat services, persistent Workshop domains and Singularity Central Station, domain facades, login and authentication services, client I/O gateways, Experience compute hosts, and rendering servers.
+
+These roles have different security, state, scaling, and resource requirements. They may be co-located when safe and scaled independently when necessary. ServerApp should not turn them into one undifferentiated backend.
 
 ## 🩵 03 — Architectural boundaries
 
 | System | Responsibility |
 |---|---|
-| FSM_COS | Compose a requested runtime from a host-supplied catalog; return a `RuntimeAssembly`. |
-| AnyApp | Desktop host and desktop presentation. |
-| WebApp | Browser-facing host, browser capabilities, and web presentation. |
-| ServerApp | Server-side host/service boundary — exact scope is an open design decision. |
+| FSM_COS | Runtime composition from a host-supplied catalog. |
+| FSM_API | State/context and process-group execution primitives. |
+| AnyApp | Desktop host and presentation. |
+| WebApp | Browser-facing host and presentation. |
+| ServerApp | Server-role provisioning, hosting, fleet operations, and bounded routing. |
+| Renderer | Visual output representation and potential reduction of server computation/traffic. |
+| Domains | External identity/facade and policy for Experiences. |
+| Experiences | Interactive content and runtime state. |
 
-ServerApp must not duplicate FSM_COS composition, invent an independent semantic tick/lifecycle, or become a required relay through which WebApp must pass. Any remote protocol must be explicit, versioned, authenticated, bounded, and independently testable.
+A landing Experience must expose interactable transfer points for Social, Settings, Hangouts, Exit, Domains, and Workshop. Its visual theme may vary—from a garden to a maze—but the required destinations must remain clearly denoted and operable.
 
-See [Architecture and Open Decisions](docs/ARCHITECTURE.md) for the current theory and the decision that must be resolved before choosing the first vertical slice.
+See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) for the full model.
 
 ## 🟢 04 — See it in a minute
 
-There is not yet a runnable application or verified server endpoint in this repository. The first executable proof will be documented here only after its project, startup path, tests, and local run instructions exist.
+There is not yet a runnable application or verified server endpoint in this repository. The first executable proof will demonstrate manifest-to-ready provisioning for one narrowly scoped server role, with tests and local run instructions.
 
 ## 🟪 05 — Documentation and next steps
 
-- [Architecture and Open Decisions](docs/ARCHITECTURE.md) — theory, boundaries, unresolved choices, and a proposed proof sequence.
+- [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
+- [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
-The initial milestone is to establish the correct server role and prove one small end-to-end path before expanding APIs, persistence, remote execution, or deployment infrastructure.
-
+The first milestone is a validated role manifest and one deterministic local provisioning path. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment should be separate milestones with independently verified contracts.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
