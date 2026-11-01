@@ -3,8 +3,10 @@
 
 # ServerApp Documentation
 
-- [Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) — static evidence and architecture surface; not a live fleet dashboard.\n- [README](README.md) — project orientation and current maturity.
+- [Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) — static evidence and architecture surface; not a live fleet dashboard.
+- [README](README.md) — project orientation and current maturity.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server-role taxonomy, manifest-driven provisioning, and proof sequence.
+- [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, source-checked contracts, and first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — product vision captured 2026-11-01, including landing experiences, service roles, authentication flow, elastic Experience compute, and Renderer.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first versioned manifest shape, adapter boundary, and local provisioning proof.
 - [Agent Onboarding](AGENTS.md) — contribution and repository rules.
@@ -12,5 +14,6 @@
 - [Branch Reconciliation](docs/BRANCH_RECONCILIATION.md) — canonical branch model and reconciliation record.
 
 ---
+
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
