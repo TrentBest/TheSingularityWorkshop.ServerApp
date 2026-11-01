@@ -151,7 +151,13 @@ The first executable slice should prove the platform's differentiator without pr
 
 The first role should be selected to minimize external dependencies while proving manifest-to-ready behavior. Do not begin with production authentication, a persistent MMORPG, or a full fleet scheduler as one indivisible milestone.
 
-## 8. Maturity and open engineering questions
+## 8. First local provisioning slice
+
+A first source implementation now exists under `src/ServerApp.Core` and `src/ServerApp.Cli`. It defines a version-1 server-role manifest, bounded validation, an explicit registered role-adapter interface, and a local provisioning coordinator that reports readiness only when the adapter reports ready. The sample `diagnostic.ready` adapter is in-process and opens no network listener.
+
+A dependency-free contract-check executable is under `tests/ServerApp.ContractChecks`; GitHub Actions build/contract-check automation is defined in `.github/workflows/ci.yml`. These are source additions only until a workflow run or local build is observed. The first slice does not resolve dependencies, reserve hardware, persist instances, schedule across hosts, load arbitrary code, or create a production server. See [Server Role Manifest](SERVER_ROLE_MANIFEST.md).
+
+## 9. Maturity and open engineering questions
 
 Current status: **conceptual architecture / repository bootstrap**. This document records product direction, not implemented capabilities. No runnable server, API, authentication authority, token protocol, database, scheduler, rendering transport, deployment workflow, or production security posture is established yet.
 
