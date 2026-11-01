@@ -7,18 +7,27 @@
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
 - Active branch: `development`; `master` remains the starting baseline.
-- Current stage: founding fleet architecture captured; no runnable server or endpoint has been established.
+- Current stage: founding fleet architecture captured; a first local manifest-to-ready source slice has been added. It is not a network server or distributed host.
 - Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
 - Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
 - Performance hypotheses: rapid manifest-to-ready activation and an early 30% computational/energy savings estimate are goals/hypotheses, not verified claims.
 - No NuGet publication, production deployment, or public endpoint exposure is authorized by this checkpoint.
 
+## Current implementation evidence
+
+- `src/ServerApp.Core`: version-1 server-role manifest, validator, explicit role-adapter contract, local provisioning coordinator.
+- `src/ServerApp.Cli`: local CLI with a non-networked `diagnostic.ready` adapter.
+- `examples/diagnostic-ready.serverapp.json`: sample manifest.
+- `tests/ServerApp.ContractChecks`: dependency-free executable contract checks.
+- `.github/workflows/ci.yml`: .NET 8 build and contract-check workflow definition.
+- Verification status: source added; no successful build/test/workflow result has yet been observed. Do not describe this slice as build-verified.
+
 ## Resume sequence
 
 1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
-2. Confirm the first server-role manifest shape and choose one narrow role for the initial proof.
-3. Implement manifest validation and a deterministic local manifest-to-ready provisioning path.
-4. Add tests, resource accounting, health/readiness, and evidence against the exact commit.
+2. Build and run the local CLI sample and contract-check executable; fix any compiler/test failures.
+3. Refine dependency semantics, resource accounting, and adapter lifecycle based on the proof.
+4. Add readiness/health contracts and idempotent instance reconciliation.
 5. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
 6. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
 
