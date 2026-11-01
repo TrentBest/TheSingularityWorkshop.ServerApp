@@ -63,7 +63,14 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
             throw new InvalidOperationException(
                 $"A provisioning workflow for instance '{manifest.InstanceId}' is already accepted or running.");
 
-        var state = new OperationState(manifest);
+        var manifestSnapshot = manifest with
+        {
+            Dependencies = manifest.Dependencies is null
+                ? null!
+                : Array.AsReadOnly(manifest.Dependencies.ToArray()),
+            Resources = manifest.Resources is null ? null! : manifest.Resources with { }
+        };
+        var state = new OperationState(manifestSnapshot);
         _operations.TryAdd(operationId, state);
 
         try
@@ -131,10 +138,31 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = GetOperation(context);
-        state.Definition = _composer.ValidateAndResolve(state.Manifest);
-        if (!_adapters.ContainsKey(state.Manifest.RoleId))
-            throw new InvalidOperationException($"No runtime adapter supports role '{state.Manifest.RoleId}'.");
-        return ValueTask.CompletedTask;
+        var errors = ManifestValidator.Validate(state.Manifest);
+        if (errors.Count > 0)
+        {
+            state.Result = new ProvisioningResult(
+                state.Manifest.InstanceId,
+                state.Manifest.RoleId,
+                ServerInstanceState.Failed,
+                "Server-role manifest validation failed.",
+                errors);
+            throw new InvalidOperationException("Server-role manifest validation failed.");
+        }
+
+        try
+        {
+            state.Definition = _composer.ValidateAndResolve(state.Manifest);
+            if (!_adapters.ContainsKey(state.Manifest.RoleId))
+                throw new InvalidOperationException($"No runtime adapter supports role '{state.Manifest.RoleId}'.");
+            return ValueTask.CompletedTask;
+        }
+        catch (Exception exception)
+        {
+            state.Result ??= Failed(state.Manifest,
+                $"Role composition definition validation failed: {exception.GetType().Name}: {exception.Message}");
+            throw;
+        }
     }
 
     private ValueTask ComposeAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
@@ -190,12 +218,14 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         catch (OperationCanceledException)
         {
             _composer.Forget(assembly.RuntimeId);
+            state.Assembly = null;
             state.Result = Failed(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
             throw;
         }
         catch (Exception exception)
         {
             _composer.Forget(assembly.RuntimeId);
+            state.Assembly = null;
             state.Result = Failed(state.Manifest, $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
             throw;
         }
