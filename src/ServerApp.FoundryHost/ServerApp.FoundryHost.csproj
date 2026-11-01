@@ -8,7 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ServerApp.Core/ServerApp.Core.csproj" />
-    <ProjectReference Include="../../_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj" />
+    <ProjectReference Include="../../_deps/FSM_Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj" />
     <ProjectReference Include="../../_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj" />
     <ProjectReference Include="../../_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj" />
   </ItemGroup>
