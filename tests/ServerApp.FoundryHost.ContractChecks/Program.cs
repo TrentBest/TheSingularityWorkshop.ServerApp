@@ -5,6 +5,7 @@ using TheSingularityWorkshop.MicroBundleRepository.Core;
 using TheSingularityWorkshop.FSM_COS;
 using TheSingularityWorkshop.Foundry;
 using TheSingularityWorkshop.MicroBundleDomain;
+using TheSingularityWorkshop.MicroBundleRepository.Local;
 
 internal static class Program
 {
@@ -22,6 +23,7 @@ internal static class Program
         await RepositorySessionRejectsConcurrentPreparation();
         await RepositorySessionPreparesVerifiedPinnedDependencyClosure();
         await RepositorySessionDoesNotPublishPartialClosure();
+        await LocalFileSystemFactoryPreparesPersistedArtifacts();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -272,6 +274,50 @@ internal static class Program
         Assert(assembly.TryGetBundle(601, out _), "the exact pinned transitive dependency should be present");
         Assert(loadOrder.SequenceEqual(new[] { 601UL, 600UL }),
             "repository-backed composition should load the dependency before the root");
+    }
+
+    private static async Task LocalFileSystemFactoryPreparesPersistedArtifacts()
+    {
+        var artifactRoot = Path.Combine(Path.GetTempPath(), "serverapp-artifacts-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var loadOrder = new List<ulong>();
+            var bytes = System.Text.Encoding.UTF8.GetBytes("persisted local artifact");
+            var address = CreateAddress(620, "1.0.0", bytes);
+            var artifact = new MicroBundleArtifact(address, bytes);
+
+            var writer = new FileSystemMicroBundleRepository(artifactRoot);
+            await writer.PutAsync(artifact);
+
+            var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+            {
+                new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                    address,
+                    () => new PinnedTestBundle(620, "1.0.0", loadOrder))
+            });
+            var factory = new LocalFileSystemCompositionSessionFactory(artifactRoot, materializers);
+            var definition = new ServerRoleCompositionDefinition(
+                "contract.local-filesystem",
+                new[] { new MicroBundleManifestEntry(620, "1.0.0") });
+            await using var session = factory.Create(definition);
+
+            await session.PrepareAsync(CancellationToken.None);
+            var assembly = session.Compose(new RuntimeManifest(
+                9020,
+                new[] { new MicroBundleManifestEntry(620, "1.0.0") }));
+
+            Assert(factory.ArtifactRoot == Path.GetFullPath(artifactRoot),
+                "the local adapter should expose its normalized host-configured artifact root");
+            Assert(assembly.TryGetBundle(620, out _),
+                "the local filesystem adapter should retrieve and compose the persisted immutable artifact");
+            Assert(loadOrder.SequenceEqual(new[] { 620UL }),
+                "the local filesystem adapter should materialize only through the registered precompiled factory");
+        }
+        finally
+        {
+            if (Directory.Exists(artifactRoot))
+                Directory.Delete(artifactRoot, recursive: true);
+        }
     }
 
     private static async Task RepositorySessionDoesNotPublishPartialClosure()
