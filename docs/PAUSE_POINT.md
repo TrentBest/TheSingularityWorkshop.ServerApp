@@ -24,10 +24,10 @@
 - `src/ServerApp.FoundryHost/ServerRoleCompositionSessions.cs`: per-candidate FSM_COS composer/catalog boundary and runtime registry; successful sessions are retained with the live runtime.
 - `src/ServerApp.FoundryHost/RepositoryBackedCompositionSession.cs`: exact inventory resolution, immutable artifact retrieval, SHA-256 verification, exact-version transitive dependency closure, atomic catalog publication, and host-registered precompiled materializer allowlist.
 - MicroBundleRepository Core source pinned in CI at `2b23967262766a0466b263e0838afbf8affd234b`.
-- [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
+- [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
 - `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
 - `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: latest PR CI run #41341468549 passed: Core contract checks 23/23 and Foundry/FSM_COS host contract checks passed against pinned source dependencies.
+- Verification status: latest PR CI run #41341712499 passed: Core contract checks 23/23 and Foundry/FSM_COS host contract checks passed against pinned source dependencies.
 
 ## Resume sequence
 
