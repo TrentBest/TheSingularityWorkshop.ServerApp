@@ -24,6 +24,9 @@ internal static class Program
         await RepositorySessionPreparesVerifiedPinnedDependencyClosure();
         await RepositorySessionDoesNotPublishPartialClosure();
         await LocalFileSystemFactoryPreparesPersistedArtifacts();
+        await RepositorySessionRejectsWrongArtifactIdentity();
+        await RepositorySessionRejectsInvalidMaterialization();
+        await RepositorySessionRejectsUnpinnedTransitiveDependencies();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -362,6 +365,98 @@ internal static class Program
         Assert(compositionBlocked, "FSM_COS must not see a partially staged candidate catalog");
     }
 
+    private static async Task RepositorySessionRejectsWrongArtifactIdentity()
+    {
+        var expectedBytes = System.Text.Encoding.UTF8.GetBytes("expected");
+        var returnedBytes = System.Text.Encoding.UTF8.GetBytes("mismatch");
+        var expectedAddress = CreateAddress(630, "1.0.0", expectedBytes);
+        var returnedAddress = CreateAddress(630, "1.0.0", returnedBytes);
+        var repository = new WrongAddressArtifactRepository(
+            new MicroBundleArtifact(expectedAddress, expectedBytes),
+            new MicroBundleArtifact(returnedAddress, returnedBytes));
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(
+            Array.Empty<KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.wrong-artifact-address",
+            new[] { new MicroBundleManifestEntry(630, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var rejected = false;
+        try
+        {
+            await session.PrepareAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected, "repository retrieval must reject an artifact whose immutable address differs from the requested address");
+    }
+
+    private static async Task RepositorySessionRejectsInvalidMaterialization()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("invalid materializer");
+        var address = CreateAddress(640, "1.0.0", bytes);
+        var artifact = new MicroBundleArtifact(address, bytes);
+        var repository = new TestArtifactRepository(artifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                address,
+                () => new PinnedTestBundle(641, "1.0.0", new List<ulong>()))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.invalid-materialization",
+            new[] { new MicroBundleManifestEntry(640, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var rejected = false;
+        try
+        {
+            await session.PrepareAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected, "a precompiled factory must not materialize a bundle with an identity different from its artifact address");
+    }
+
+    private static async Task RepositorySessionRejectsUnpinnedTransitiveDependencies()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("unpinned dependency root");
+        var address = CreateAddress(650, "1.0.0", bytes);
+        var artifact = new MicroBundleArtifact(address, bytes);
+        var repository = new TestArtifactRepository(artifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                address,
+                () => new TestBundle(650, "1.0.0", new List<ulong>(), new[] { 651UL }))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.unpinned-dependency",
+            new[] { new MicroBundleManifestEntry(650, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var rejected = false;
+        try
+        {
+            await session.PrepareAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected, "repository-backed preparation must reject unpinned transitive dependencies");
+    }
+
     private static MicroBundleArtifactAddress CreateAddress(ulong bundleId, string version, byte[] bytes) =>
         new(bundleId, version, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
 
@@ -484,6 +579,34 @@ internal static class Program
             IReadOnlyList<MicroBundleArtifactObservation> observations = new[]
             {
                 new MicroBundleArtifactObservation(artifact.Address, artifact.Content.Length, null)
+            };
+            return ValueTask.FromResult(observations);
+        }
+    }
+
+    private sealed class WrongAddressArtifactRepository(
+        MicroBundleArtifact advertised,
+        MicroBundleArtifact returned)
+        : IMicroBundleRepository, IMicroBundleRepositoryObserver
+    {
+        public ValueTask<MicroBundleArtifact?> GetAsync(
+            MicroBundleArtifactAddress address,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<MicroBundleArtifact?>(returned);
+        }
+
+        public ValueTask PutAsync(MicroBundleArtifact artifact, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The contract fixture is read-only.");
+
+        public ValueTask<IReadOnlyList<MicroBundleArtifactObservation>> ListAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<MicroBundleArtifactObservation> observations = new[]
+            {
+                new MicroBundleArtifactObservation(advertised.Address, advertised.Content.Length, null)
             };
             return ValueTask.FromResult(observations);
         }
