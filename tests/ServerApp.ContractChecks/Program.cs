@@ -127,20 +127,7 @@ static async Task InvalidResourcesAreRejected()
         "Invalid resource values were not rejected.");
 }
 
-static void Assert(bool condition, string message)
-{
-    if (!condition) throw new InvalidOperationException(message);
-}
 
-sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
-{
-    public string RoleId => roleId;
-
-    public ValueTask<RoleStartResult> StartAsync(
-        ServerRoleManifest manifest,
-        CancellationToken cancellationToken) =>
-        ValueTask.FromResult(new RoleStartResult(true, "ready"));
-}
 
 
 static async Task DependenciesRequireReadyInstances()
@@ -172,4 +159,19 @@ static async Task DuplicateInstanceActivationIsRejected()
     Assert(first.IsReady && second.State == ServerInstanceState.Failed &&
            second.Detail.Contains("already registered or starting"),
         "Duplicate instance activation was not rejected.");
+}
+
+static void Assert(bool condition, string message)
+{
+    if (!condition) throw new InvalidOperationException(message);
+}
+
+sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+
+    public ValueTask<RoleStartResult> StartAsync(
+        ServerRoleManifest manifest,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new RoleStartResult(true, "ready"));
 }
