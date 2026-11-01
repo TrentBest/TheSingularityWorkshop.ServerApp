@@ -11,6 +11,7 @@
     "InstanceId": { "type": "string", "minLength": 1, "maxLength": 128 },
     "RoleId": { "type": "string", "minLength": 1, "maxLength": 128 },
     "Dependencies": {
+      "description": "Server instance IDs that must already be Ready in the same in-process coordinator; these are not MicroBundle dependencies.",
       "type": "array",
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1, "maxLength": 128 },
