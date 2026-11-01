@@ -16,6 +16,7 @@ internal static class Program
         await ComposedRoleUsesFoundryAndFsmCos();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
+        await ConcurrentCandidatesHaveIsolatedCatalogs();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -96,7 +97,7 @@ internal static class Program
             "contract.composed",
             new[] { new MicroBundleManifestEntry(100, "1.0.0") });
         var composer = new ServerRoleRuntimeComposer(
-            new FsmCos(catalog),
+            new FsmCosCompositionSessionFactory(_ => catalog),
             new TestRoleCompositionCatalog(definition));
         var adapter = new RecordingRuntimeAdapter("contract.composed", isReady: true);
         await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
@@ -123,7 +124,7 @@ internal static class Program
             "contract.missing",
             new[] { new MicroBundleManifestEntry(404, "1.0.0") });
         var composer = new ServerRoleRuntimeComposer(
-            new FsmCos(missingCatalog),
+            new FsmCosCompositionSessionFactory(_ => missingCatalog),
             new TestRoleCompositionCatalog(definition));
         var adapter = new RecordingRuntimeAdapter("contract.missing", isReady: true);
         await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
@@ -144,7 +145,7 @@ internal static class Program
             "contract.not-ready",
             new[] { new MicroBundleManifestEntry(200, "1.0.0") });
         var composer = new ServerRoleRuntimeComposer(
-            new FsmCos(new TestBundleCatalog(bundle)),
+            new FsmCosCompositionSessionFactory(_ => new TestBundleCatalog(bundle)),
             new TestRoleCompositionCatalog(definition));
         var adapter = new RecordingRuntimeAdapter("contract.not-ready", isReady: false);
         await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
@@ -157,6 +158,42 @@ internal static class Program
             "a composed but unready role must not be reported Ready");
         Assert(host.GetRuntimeAssembly(submission.RunId) is null,
             "a failed activation must not remain advertised as the active runtime assembly");
+    }
+
+    private static async Task ConcurrentCandidatesHaveIsolatedCatalogs()
+    {
+        var definitionV1 = new ServerRoleCompositionDefinition(
+            "contract.version-one",
+            new[] { new MicroBundleManifestEntry(500, "1.0.0") });
+        var definitionV2 = new ServerRoleCompositionDefinition(
+            "contract.version-two",
+            new[] { new MicroBundleManifestEntry(500, "2.0.0") });
+        var definitions = new TestRoleCompositionCatalog(definitionV1, definitionV2);
+        var sessions = new FsmCosCompositionSessionFactory(definition =>
+        {
+            var version = definition.RoleId == "contract.version-one" ? "1.0.0" : "2.0.0";
+            var bundle = new TestBundle(500, version, new List<ulong>());
+            return new TestBundleCatalog(bundle);
+        });
+        var composer = new ServerRoleRuntimeComposer(sessions, definitions);
+        var adapterV1 = new RecordingRuntimeAdapter("contract.version-one", isReady: true);
+        var adapterV2 = new RecordingRuntimeAdapter("contract.version-two", isReady: true);
+        await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapterV1, adapterV2 });
+
+        var first = host.Submit(CreateManifest("candidate-one", "contract.version-one"));
+        var second = host.Submit(CreateManifest("candidate-two", "contract.version-two"));
+        var results = await Task.WhenAll(host.StartAsync(first.RunId), host.StartAsync(second.RunId));
+
+        Assert(results.All(result => result.Status == WorkflowStatus.Succeeded),
+            "both concurrent candidates should compose and activate successfully");
+        Assert(adapterV1.ReceivedAssembly?.TryGetBundle(500, out var bundleV1) == true &&
+               bundleV1.Descriptor.Version == "1.0.0",
+            "the first candidate must resolve its own 1.0.0 catalog entry");
+        Assert(adapterV2.ReceivedAssembly?.TryGetBundle(500, out var bundleV2) == true &&
+               bundleV2.Descriptor.Version == "2.0.0",
+            "the second candidate must resolve its own 2.0.0 catalog entry");
+        Assert(adapterV1.ReceivedAssembly!.RuntimeId != adapterV2.ReceivedAssembly!.RuntimeId,
+            "candidate sessions must retain distinct runtime identities");
     }
 
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
