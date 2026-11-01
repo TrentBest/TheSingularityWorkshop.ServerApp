@@ -215,9 +215,9 @@ internal static class Program
             new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
                 rootAddress,
                 () => new PinnedTestBundle(600, "1.0.0", loadOrder, new[] { (601UL, "2.0.0") })),
-            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
                 dependencyAddress,
-                _ => new PinnedTestBundle(601, "2.0.0", loadOrder))
+                () => new PinnedTestBundle(601, "2.0.0", loadOrder))
         });
         var definition = new ServerRoleCompositionDefinition(
             "contract.repository-backed",
@@ -244,9 +244,9 @@ internal static class Program
         var repository = new TestArtifactRepository(rootArtifact);
         var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
         {
-            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
                 rootAddress,
-                _ => new PinnedTestBundle(610, "1.0.0", new List<ulong>(), new[] { (611UL, "1.0.0") }))
+                () => new PinnedTestBundle(610, "1.0.0", new List<ulong>(), new[] { (611UL, "1.0.0") }))
         });
         var definition = new ServerRoleCompositionDefinition(
             "contract.repository-incomplete",
