@@ -3,7 +3,7 @@
 
 # FSM_Foundry Integration Boundary
 
-**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41355326065](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355326065) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A local persistent filesystem artifact adapter is now available for development hosts. Remote/production storage authorization and provenance policy, a production server role process, and a distributed host remain incomplete.
+**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A local persistent filesystem artifact adapter is now available for development hosts. Remote/production storage authorization and provenance policy, a production server role process, and a distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -133,7 +133,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41355326065](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355326065) passed with zero build errors, including the local filesystem adapter and persisted-artifact contract check. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed with zero build errors, including the local filesystem adapter and persisted-artifact contract check. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
@@ -152,6 +152,7 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
 - [x] Candidate-scoped session abstraction gives every provisioning operation its own FSM_COS composer/catalog boundary and runtime registry; successful sessions remain retained with their runtime.
 - [x] Repository-backed candidate preparation resolves exact immutable artifact addresses, retrieves and SHA-256 verifies each artifact, enforces exact-version transitive dependencies, and atomically publishes a private catalog only after full preparation.
+- [x] Negative repository contracts reject mismatched returned artifact addresses, materializers returning a different bundle identity, and unpinned transitive dependencies.
 - [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; factories receive no artifact bytes, and downloaded bytes are never loaded as assemblies or scripts.
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination; same-session concurrent preparation is rejected and catalog publication is serialized against disposal.
 - [x] CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with six exact source dependencies pinned.
