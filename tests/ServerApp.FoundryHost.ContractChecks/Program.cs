@@ -19,6 +19,7 @@ internal static class Program
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         await ConcurrentCandidatesHaveIsolatedCatalogs();
+        await RepositorySessionRejectsConcurrentPreparation();
         await RepositorySessionPreparesVerifiedPinnedDependencyClosure();
         await RepositorySessionDoesNotPublishPartialClosure();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
@@ -200,6 +201,43 @@ internal static class Program
             "candidate sessions must retain distinct runtime identities");
     }
 
+    private static async Task RepositorySessionRejectsConcurrentPreparation()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes("single candidate artifact");
+        var address = CreateAddress(590, "1.0.0", bytes);
+        var artifact = new MicroBundleArtifact(address, bytes);
+        var repository = new BlockingArtifactRepository(artifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>(
+                address,
+                () => new PinnedTestBundle(590, "1.0.0", new List<ulong>()))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.concurrent-prepare",
+            new[] { new MicroBundleManifestEntry(590, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var firstPreparation = session.PrepareAsync(CancellationToken.None).AsTask();
+        await repository.RetrievalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var concurrentRejected = false;
+        try
+        {
+            await session.PrepareAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            concurrentRejected = true;
+        }
+
+        repository.AllowRetrieval.TrySetResult(true);
+        await firstPreparation;
+        Assert(concurrentRejected,
+            "a second preparation must not race the first and replace its candidate catalog");
+    }
+
     private static async Task RepositorySessionPreparesVerifiedPinnedDependencyClosure()
     {
         var loadOrder = new List<ulong>();
@@ -371,6 +409,38 @@ internal static class Program
 
         public bool TryResolve(ulong bundleId, out IMicroBundle? bundle) =>
             _bundles.TryGetValue(bundleId, out bundle);
+    }
+
+    private sealed class BlockingArtifactRepository(MicroBundleArtifact artifact)
+        : IMicroBundleRepository, IMicroBundleRepositoryObserver
+    {
+        public TaskCompletionSource<bool> RetrievalStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> AllowRetrieval { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<MicroBundleArtifact?> GetAsync(
+            MicroBundleArtifactAddress address,
+            CancellationToken cancellationToken = default)
+        {
+            RetrievalStarted.TrySetResult(true);
+            await AllowRetrieval.Task.WaitAsync(cancellationToken);
+            return artifact.Address == address ? artifact : null;
+        }
+
+        public ValueTask PutAsync(MicroBundleArtifact value, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The contract fixture is read-only.");
+
+        public ValueTask<IReadOnlyList<MicroBundleArtifactObservation>> ListAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<MicroBundleArtifactObservation> observations = new[]
+            {
+                new MicroBundleArtifactObservation(artifact.Address, artifact.Content.Length, null)
+            };
+            return ValueTask.FromResult(observations);
+        }
     }
 
     private sealed class TestArtifactRepository(params MicroBundleArtifact[] artifacts)
