@@ -5,7 +5,9 @@ public enum ServerInstanceState
     Accepted,
     Starting,
     Ready,
-    Failed
+    Failed,
+    Skipped,
+    Cancelled
 }
 
 public sealed record RoleStartResult(bool IsReady, string Detail);
