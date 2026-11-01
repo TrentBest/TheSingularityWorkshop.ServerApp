@@ -63,7 +63,7 @@ The early estimate of 30% computational/energy savings is a hypothesis only. No 
 
 ## Initial host-capacity placement proof
 
-`HostPlacementPlanner` accepts a batch of validated role manifests and a snapshot of host CPU/memory capacities. It uses the deterministic dependency order from `ProvisioningPlanBuilder`, then applies stable first-fit placement across hosts sorted by ordinal `HostId`. Each placement consumes CPU cores and memory MiB from a private in-memory ledger; remaining capacity is returned with the placement. Manifests that cannot fit are reported as unplaced while other instances may still be placed.
+`HostPlacementPlanner` accepts a batch of validated role manifests and a snapshot of host CPU/memory capacities. It uses the deterministic dependency order from `ProvisioningPlanBuilder`, then applies stable first-fit placement across hosts sorted by ordinal `HostId`. Each placement consumes CPU cores and memory MiB from a private in-memory ledger; remaining capacity is returned with the placement. Manifests that cannot fit are reported as unplaced while other independent instances may still be placed. A dependent instance is also reported as unplaced when any prerequisite is neither in the explicitly Ready external set nor successfully placed in this plan; it is never assigned a host whose required dependency could not be placed.
 
 Invalid or duplicate host profiles and invalid manifest/dependency plans reject the placement plan before any placements are produced. The planner does not mutate caller-supplied host profiles, reserve real hardware, enforce isolation, inspect GPU/network/storage capabilities, or start workloads. This is a deterministic resource-accounting proof—not a live scheduler.
 
