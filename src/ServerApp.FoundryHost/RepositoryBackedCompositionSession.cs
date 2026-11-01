@@ -25,10 +25,10 @@ public sealed class ServerRolePrecompiledMicroBundleRegistry : IServerRolePrecom
     private readonly IReadOnlyDictionary<MicroBundleArtifactAddress, Func<IMicroBundle>> _factories;
 
     public ServerRolePrecompiledMicroBundleRegistry(
-        IEnumerable<KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>> registrations)
+        IEnumerable<KeyValuePair<MicroBundleArtifactAddress, Func<IMicroBundle>>> registrations)
     {
         ArgumentNullException.ThrowIfNull(registrations);
-        var factories = new Dictionary<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>();
+        var factories = new Dictionary<MicroBundleArtifactAddress, Func<IMicroBundle>>();
         foreach (var registration in registrations)
         {
             ArgumentNullException.ThrowIfNull(registration.Value);
@@ -36,7 +36,7 @@ public sealed class ServerRolePrecompiledMicroBundleRegistry : IServerRolePrecom
                 throw new ArgumentException($"Duplicate precompiled MicroBundle registration '{registration.Key}'.", nameof(registrations));
         }
 
-        _factories = new ReadOnlyDictionary<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(factories);
+        _factories = new ReadOnlyDictionary<MicroBundleArtifactAddress, Func<IMicroBundle>>(factories);
     }
 
     public bool TryMaterialize(MicroBundleArtifactAddress address, out IMicroBundle? bundle)
