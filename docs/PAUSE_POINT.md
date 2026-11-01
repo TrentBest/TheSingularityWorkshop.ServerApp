@@ -20,7 +20,7 @@
 - `examples/diagnostic-ready.serverapp.json`: sample manifest.
 - `tests/ServerApp.ContractChecks`: dependency-free Core contract checks.
 - `src/ServerApp.FoundryHost`: submits provisioning workflows to Foundry's real `WorkflowExecutionCoordinator` using an explicitly registered handler.
-- `tests/ServerApp.FoundryHost.ContractChecks`: verifies ready, not-ready failure, duplicate pending submission rejection, and accepted-run cancellation.
+- `tests/ServerApp.FoundryHost.ContractChecks`: verifies ready, not-ready failure, duplicate pending submission rejection, accepted-run cancellation, and cooperative cancellation while a role handler is running.
 - `.github/workflows/ci.yml`: checks out Foundry at exact commit `8bd3487a96af2cd7d667f62c4566a499bafe30dc`, builds the host integration, and runs both contract-check executables.
 - Verification status: source and CI workflow updated; the exact latest workflow result still needs confirmation. Do not call this CI-passed yet.
 
@@ -30,9 +30,9 @@
 2. Clone Foundry into `_deps/Foundry` at the exact pinned commit recorded in [Foundry Integration](FOUNDRY_INTEGRATION.md), then build/run the host integration contract checks.
 3. Verify the exact ServerApp CI run; fix compiler/test failures before expanding the integration.
 4. Implement the separate FSM_COS composition handoff and a real RuntimeAssembly-consuming role host; do not equate workflow success with runtime readiness.
-4. Add readiness/health contracts and idempotent instance reconciliation.
-5. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
-6. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
+5. Add readiness/health contracts and idempotent instance reconciliation.
+6. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
+7. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
 
 ## Known constraints
 
