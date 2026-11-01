@@ -92,7 +92,6 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
                 });
 
             var snapshot = _workflows.Submit(definition, context);
-            state.RunId = snapshot.RunId;
             _runOperations.TryAdd(snapshot.RunId, operationId);
             return snapshot;
         }
@@ -113,7 +112,23 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         }
         finally
         {
-            ReleasePendingInstance(runId);
+            try
+            {
+                var snapshot = _workflows.GetSnapshot(runId);
+                if (snapshot.Status is WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or
+                    WorkflowRunStatus.Cancelled or WorkflowRunStatus.TimedOut or WorkflowRunStatus.Invalid)
+                {
+                    if (snapshot.Status == WorkflowRunStatus.Cancelled &&
+                        TryGetOperation(runId, out var state) && state.Result is null)
+                        state.Result = Cancelled(state.Manifest, "Foundry cancelled the provisioning workflow.");
+
+                    ReleasePendingInstance(runId);
+                }
+            }
+            catch (KeyNotFoundException)
+            {
+                // Preserve the original StartAsync exception for an unknown run ID.
+            }
         }
     }
 
@@ -122,7 +137,11 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
     {
         var cancelled = _workflows.Cancel(runId);
         if (cancelled && _workflows.GetSnapshot(runId).Status == WorkflowRunStatus.Cancelled)
+        {
+            if (TryGetOperation(runId, out var state) && state.Result is null)
+                state.Result = Cancelled(state.Manifest, "Foundry cancelled the accepted provisioning workflow.");
             ReleasePendingInstance(runId);
+        }
         return cancelled;
     }
 
@@ -178,7 +197,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.CompletedTask;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (state.Assembly is not null)
                 _composer.Forget(state.Assembly.RuntimeId);
@@ -219,7 +238,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         {
             _composer.Forget(assembly.RuntimeId);
             state.Assembly = null;
-            state.Result = Failed(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
+            state.Result = Cancelled(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
             throw;
         }
         catch (Exception exception)
@@ -260,12 +279,15 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         new(manifest.InstanceId, manifest.RoleId, ServerInstanceState.Failed,
             detail, Array.Empty<ManifestValidationError>());
 
+    private static ProvisioningResult Cancelled(ServerRoleManifest manifest, string detail) =>
+        new(manifest.InstanceId, manifest.RoleId, ServerInstanceState.Cancelled,
+            detail, Array.Empty<ManifestValidationError>());
+
     public ValueTask DisposeAsync() => _workflows.DisposeAsync();
 
     private sealed class OperationState(ServerRoleManifest manifest)
     {
         public ServerRoleManifest Manifest { get; } = manifest;
-        public Guid RunId { get; set; }
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }
