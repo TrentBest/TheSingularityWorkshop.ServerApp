@@ -2,6 +2,8 @@ using ServerApp.Core;
 
 var checks = new (string Name, Func<Task> Run)[]
 {
+    ("version 1 JSON manifest parses", VersionOneJsonParses),
+    ("unknown JSON properties are rejected", UnknownJsonPropertyIsRejected),
     ("valid manifest reaches ready through registered adapter", ValidManifestReachesReady),
     ("unsupported schema is rejected before activation", UnsupportedSchemaIsRejected),
     ("unknown role is not dynamically loaded", UnknownRoleIsRejected),
@@ -26,6 +28,46 @@ foreach (var check in checks)
 
 Console.WriteLine($"{checks.Length - failures.Count}/{checks.Length} contract checks passed.");
 return failures.Count == 0 ? 0 : 1;
+
+static Task VersionOneJsonParses()
+{
+    const string json = """
+    {
+      "SchemaVersion": 1,
+      "InstanceId": "json-check",
+      "RoleId": "test.ready",
+      "Dependencies": [],
+      "Resources": { "CpuCores": 1, "MemoryMiB": 128 }
+    }
+    """;
+    var manifest = ServerRoleManifest.Parse(json);
+    Assert(manifest.InstanceId == "json-check" && manifest.RoleId == "test.ready",
+        "JSON values did not map to the manifest.");
+    return Task.CompletedTask;
+}
+
+static Task UnknownJsonPropertyIsRejected()
+{
+    const string json = """
+    {
+      "SchemaVersion": 1,
+      "InstanceId": "json-check",
+      "RoleId": "test.ready",
+      "Dependencies": [],
+      "Resources": { "CpuCores": 1, "MemoryMiB": 128 },
+      "Execute": "not-allowed"
+    }
+    """;
+    try
+    {
+        _ = ServerRoleManifest.Parse(json);
+        throw new InvalidOperationException("Unknown property was accepted.");
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        return Task.CompletedTask;
+    }
+}
 
 static ServerRoleManifest ValidManifest() => new()
 {
