@@ -3,7 +3,7 @@
 
 # FSM_Foundry Integration Boundary
 
-**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A local persistent filesystem artifact adapter is now available for development hosts. Remote/production storage authorization and provenance policy, a production server role process, and a distributed host remain incomplete.
+**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41362237960](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41362237960) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A local persistent filesystem artifact adapter is now available for development hosts. Remote/production storage authorization and provenance policy, a production server role process, and a distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -133,7 +133,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed with zero build errors, including the local filesystem adapter and persisted-artifact contract check. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41362237960](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41362237960) passed all pinned-source checkouts, Core/CLI and Foundry host builds, and both contract-check executables, including lifecycle drain/stop/retry/cleanup coverage. Documentation warnings originate in pinned upstream source projects. No package publication is authorized.
 
 ## 6. Role lifecycle boundary
 
