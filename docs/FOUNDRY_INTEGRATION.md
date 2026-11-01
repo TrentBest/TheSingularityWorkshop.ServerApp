@@ -3,7 +3,7 @@
 
 # FSM_Foundry Integration Boundary
 
-**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
+**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A local persistent filesystem artifact adapter is now available for development hosts. Remote/production storage authorization and provenance policy, a production server role process, and a distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -112,7 +112,7 @@ Foundry, FSM_COS, MicroBundleDomain, and MicroBundleRepository Core are built fr
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
 | [MicroBundleRepository](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository) | `2b23967262766a0466b263e0838afbf8affd234b` |
 
-FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/FSM_Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj`, `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`, and `_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
+FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/FSM_Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj`, `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`, `_deps/MicroBundleRepository/src/Core/TheSingularityWorkshop.MicroBundleRepository.Core/TheSingularityWorkshop.MicroBundleRepository.Core.csproj`, and `_deps/MicroBundleRepository/src/Local/TheSingularityWorkshop.MicroBundleRepository.Local/TheSingularityWorkshop.MicroBundleRepository.Local.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
 For a local checkout from the ServerApp repository root:
 
@@ -137,7 +137,7 @@ A floating branch checkout is not acceptable verification. `ServerApp.Core` rema
 
 ## 6. Non-goals of the first proof
 
-The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, concrete persistent/network repository deployment, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. The host-side repository resolver consumes injected `IMicroBundleRepository` and inventory-observer contracts; tests use an in-memory implementation. It does not expose a REST endpoint or deploy storage. Exact-address retrieval, SHA-256 verification, pinned closure preparation, and precompiled materialization are implemented and contract-tested; operational authentication, authorization, provenance policy, and storage deployment remain separate requirements.
+The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, concrete persistent/network repository deployment, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. The host-side resolver consumes injected `IMicroBundleRepository` and inventory-observer contracts. `LocalFileSystemCompositionSessionFactory` now supplies both contracts from one explicitly rooted `FileSystemMicroBundleRepository`; this is a development adapter, not a production trust boundary. The host receives no write API through the session factory, and this integration does not expose a REST endpoint, deploy storage, or define remote authorization/provenance. Exact-address retrieval, SHA-256 verification, pinned closure preparation, and precompiled materialization are implemented and contract-tested; operational authentication, authorization, provenance policy, and storage deployment remain separate requirements.
 
 ## 7. Progress gate
 
@@ -156,7 +156,8 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination; same-session concurrent preparation is rejected and catalog publication is serialized against disposal.
 - [x] CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with six exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the FSM_Foundry/FSM_COS/repository host contract-check executable passed.
-- [ ] Integrate a concrete persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
+- [x] Add an explicitly rooted local filesystem MicroBundleRepository adapter for development composition sessions; Core retrieval and inventory are supplied by the same repository instance.
+- [ ] Select and integrate a production persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
 - [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
 
 
