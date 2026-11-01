@@ -1,0 +1,10 @@
+{
+  "SchemaVersion": 1,
+  "InstanceId": "local-diagnostic-001",
+  "RoleId": "diagnostic.ready",
+  "Dependencies": [],
+  "Resources": {
+    "CpuCores": 1,
+    "MemoryMiB": 128
+  }
+}
