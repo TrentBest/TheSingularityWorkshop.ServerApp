@@ -7,7 +7,7 @@
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
 - Active branch: `development`; `master` remains the starting baseline.
-- Current stage: local manifest/placement proofs and a source-pinned Foundry → FSM_COS → role-adapter workflow are source-implemented. Candidate-scoped composition sessions now isolate each provisioning operation's FSM_COS composer/catalog boundary and runtime registry. Repository-backed exact-address retrieval, SHA-256 verification, pinned dependency-closure preparation, atomic private-catalog staging, and host-allowlisted precompiled materialization are implemented against MicroBundleRepository Core contracts. A concrete persistent/network storage adapter and production server role host remain incomplete.
+- Current stage: local manifest/placement proofs and a source-pinned FSM_Foundry → FSM_COS → role-adapter workflow are source-implemented. Candidate-scoped composition sessions now isolate each provisioning operation's FSM_COS composer/catalog boundary and runtime registry. Repository-backed exact-address retrieval, SHA-256 verification, pinned dependency-closure preparation, atomic private-catalog staging, and host-allowlisted precompiled materialization are implemented against MicroBundleRepository Core contracts. A concrete persistent/network storage adapter and production server role host remain incomplete.
 - Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
 - Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
 - Performance hypotheses: rapid manifest-to-ready activation and an early 30% computational/energy savings estimate are goals/hypotheses, not verified claims.
@@ -27,12 +27,12 @@
 - [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
 - `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
 - `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: latest PR CI run #41341712499 passed: Core contract checks 23/23 and Foundry/FSM_COS host contract checks passed against pinned source dependencies.
+- Verification status: latest PR CI run #41341712499 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
 
 ## Resume sequence
 
 1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
-2. Follow the six-repository pinned source checkout instructions in [Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
+2. Follow the six-repository pinned source checkout instructions in [FSM_Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
 3. Keep the passing pinned-source CI path intact; any integration change must retain exact-SHA build and contract-check evidence.
 4. Add and verify a concrete persistent/network MicroBundleRepository storage adapter plus operational authorization/provenance policy. The host-side resolver and precompiled materializer boundary are implemented and contract-tested; no REST listener or production repository deployment is implied.
 5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
