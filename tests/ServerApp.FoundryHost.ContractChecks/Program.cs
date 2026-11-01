@@ -18,6 +18,8 @@ internal static class Program
         await RunningWorkflowCanBeCancelled();
         await ComposedRoleUsesFoundryAndFsmCos();
         await ComposedRoleCanDrainStopAndRetryCleanup();
+        await ComposedRoleLifecycleCancellationPreservesSession();
+        await ConcurrentDrainAndStopSerialize();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         await ConcurrentCandidatesHaveIsolatedCatalogs();
@@ -179,6 +181,75 @@ internal static class Program
             "confirmed stop should forget the runtime and dispose the session exactly once");
         Assert(host.GetRuntimeAssembly(submission.RunId) is null,
             "the host should release its assembly reference after confirmed stop");
+    }
+
+    private static async Task ComposedRoleLifecycleCancellationPreservesSession()
+    {
+        var bundle = new TestBundle(151, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.lifecycle-cancel",
+            new[] { new MicroBundleManifestEntry(151, "1.0.0") });
+        var sessions = new TrackingCompositionSessionFactory(_ => new TestBundleCatalog(bundle));
+        var composer = new ServerRoleRuntimeComposer(sessions, new TestRoleCompositionCatalog(definition));
+        var adapter = new LifecycleRoleAdapter("contract.lifecycle-cancel") { BlockDrain = true };
+        await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
+        var submission = host.Submit(CreateManifest("instance-lifecycle-cancel", "contract.lifecycle-cancel"));
+        Assert((await host.StartAsync(submission.RunId)).Status == WorkflowStatus.Succeeded,
+            "lifecycle cancellation fixture should activate");
+
+        using var cancellation = new CancellationTokenSource();
+        var drain = host.DrainRoleAsync(submission.RunId, cancellation.Token).AsTask();
+        await adapter.DrainStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        var cancelled = false;
+        try
+        {
+            await drain.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+
+        Assert(cancelled, "cancelling a blocked drain should propagate cancellation");
+        Assert(host.GetLifecycleController(submission.RunId)!.State == ServerRoleLifecycleState.Running,
+            "cancelled drain should restore the Running state");
+        Assert(sessions.LastState!.ForgetCount == 0 && sessions.LastState.DisposeCount == 0,
+            "cancelled drain must preserve the live runtime registry and composition session");
+
+        adapter.BlockDrain = false;
+        await host.StopRoleAsync(submission.RunId);
+        Assert(host.GetLifecycleController(submission.RunId)!.State == ServerRoleLifecycleState.Stopped,
+            "the role should remain stoppable after a cancelled drain");
+    }
+
+    private static async Task ConcurrentDrainAndStopSerialize()
+    {
+        var bundle = new TestBundle(152, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.lifecycle-concurrent",
+            new[] { new MicroBundleManifestEntry(152, "1.0.0") });
+        var sessions = new TrackingCompositionSessionFactory(_ => new TestBundleCatalog(bundle));
+        var composer = new ServerRoleRuntimeComposer(sessions, new TestRoleCompositionCatalog(definition));
+        var adapter = new LifecycleRoleAdapter("contract.lifecycle-concurrent") { BlockDrain = true };
+        await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
+        var submission = host.Submit(CreateManifest("instance-lifecycle-concurrent", "contract.lifecycle-concurrent"));
+        Assert((await host.StartAsync(submission.RunId)).Status == WorkflowStatus.Succeeded,
+            "concurrent lifecycle fixture should activate");
+
+        var drain = host.DrainRoleAsync(submission.RunId).AsTask();
+        await adapter.DrainStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var stop = host.StopRoleAsync(submission.RunId).AsTask();
+        adapter.AllowDrain.TrySetResult();
+        await Task.WhenAll(drain, stop).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert(host.GetLifecycleController(submission.RunId)!.State == ServerRoleLifecycleState.Stopped,
+            "concurrent drain and stop should serialize to a terminal Stopped state");
+        Assert(adapter.DrainCount == 1 && adapter.StopCount == 1,
+            "concurrent drain and stop should not duplicate either adapter operation");
+        Assert(sessions.LastState!.ForgetCount == 1 && sessions.LastState.DisposeCount == 1,
+            "concurrent lifecycle requests should perform cleanup exactly once");
     }
 
     private static async Task CompositionFailurePreventsRoleActivation()
@@ -896,6 +967,11 @@ internal static class Program
         public int DrainCount { get; private set; }
         public int StopCount { get; private set; }
         public bool FailFirstStop { get; set; }
+        public bool BlockDrain { get; set; }
+        public TaskCompletionSource DrainStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllowDrain { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ValueTask<RoleStartResult> StartAsync(
             ServerRoleManifest manifest, RuntimeAssembly assembly, CancellationToken cancellationToken)
@@ -904,12 +980,15 @@ internal static class Program
             return ValueTask.FromResult(new RoleStartResult(true, "Lifecycle fixture is ready."));
         }
 
-        public ValueTask<RoleLifecycleResult> DrainAsync(
+        public async ValueTask<RoleLifecycleResult> DrainAsync(
             ServerRoleManifest manifest, RuntimeAssembly assembly, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             DrainCount++;
-            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture drained."));
+            DrainStarted.TrySetResult();
+            if (BlockDrain)
+                await AllowDrain.Task.WaitAsync(cancellationToken);
+            return new RoleLifecycleResult(true, "Lifecycle fixture drained.");
         }
 
         public ValueTask<RoleLifecycleResult> StopAsync(
