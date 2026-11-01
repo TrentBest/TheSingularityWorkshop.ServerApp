@@ -45,18 +45,18 @@ Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingu
 
 ## 🟢 05 — See it in a minute
 
-The local manifest-to-ready proof, Foundry/FSM_COS workflow, candidate-isolated composition sessions, and repository-backed artifact preparation boundary are source-implemented. The latter resolves exact immutable artifacts, verifies SHA-256, enforces pinned transitive dependencies, and invokes only host-registered precompiled materializers; it does not dynamically load artifact bytes. With the .NET 8 SDK, run the diagnostic Core checks:
+The local manifest-to-ready proof, FSM_Foundry/FSM_COS workflow, candidate-isolated composition sessions, and repository-backed artifact preparation boundary are source-implemented. The latter resolves exact immutable artifacts, verifies SHA-256, enforces pinned transitive dependencies, and invokes only host-registered precompiled materializers; it does not dynamically load artifact bytes. With the .NET 8 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-To build and run the composed Foundry/FSM_COS integration checks, first place the six source repositories at the exact revisions used by CI:
+To build and run the composed FSM_Foundry/FSM_COS integration checks, first place the six source repositories at the exact revisions used by CI:
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry.git _deps/FSM_Foundry
+git -C _deps/FSM_Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -70,12 +70,12 @@ git -C _deps/MicroBundleRepository checkout 2b23967262766a0466b263e0838afbf8affd
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove a concrete persistent/network repository deployment, production role process, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove a concrete persistent/network repository deployment, production role process, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [FSM_Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 06 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
-- [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
+- [FSM_Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
