@@ -194,6 +194,8 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         try
         {
             state.Session = _composer.CreateSession(definition);
+            await state.Session.PrepareAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             state.Assembly = _composer.Compose(state.Session, definition);
             cancellationToken.ThrowIfCancellationRequested();
         }
