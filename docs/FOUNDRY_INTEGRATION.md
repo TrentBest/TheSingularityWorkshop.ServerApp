@@ -135,9 +135,13 @@ dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.Foundr
 
 A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed with zero build errors, including the local filesystem adapter and persisted-artifact contract check. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
-## 6. Non-goals of the first proof
+## 6. Role lifecycle boundary
 
-The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, concrete persistent/network repository deployment, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. The host-side resolver consumes injected `IMicroBundleRepository` and inventory-observer contracts. `LocalFileSystemCompositionSessionFactory` now supplies both contracts from one explicitly rooted `FileSystemMicroBundleRepository`; this is a development adapter, not a production trust boundary. The host receives no write API through the session factory, and this integration does not expose a REST endpoint, deploy storage, or define remote authorization/provenance. Exact-address retrieval, SHA-256 verification, pinned closure preparation, and precompiled materialization are implemented and contract-tested; operational authentication, authorization, provenance policy, and storage deployment remain separate requirements.
+Successful activation now retains a host-owned `ServerRoleLifecycleController` when the registered adapter implements `IServerRoleLifecycleAdapter`. The host exposes `GetLifecycleController(runId)`, `DrainRoleAsync(runId)`, and `StopRoleAsync(runId)`. The controller serializes transitions, makes drain idempotent, automatically drains before stop, preserves a drained live session after a failed stop, and retries post-stop registry/session cleanup without repeating a confirmed role stop. Cleanup is performed only after the adapter confirms stop. Contract checks cover explicit drain, transient stop failure, retry, repeated stop, and exactly-once registry/session cleanup. This is a host lifecycle contract exercised with an in-process fixture; it is not yet a production process adapter, service manager, or public endpoint. The adapter is responsible for the meaning and evidence of drain/stop; FSM_COS composition cleanup is a separate subsequent action and does not claim arbitrary bundle unloading.
+
+## 7. Non-goals of the first proof
+
+The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, concrete persistent/network repository deployment, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, production process supervision, arbitrary bundle unloading, migration, or production deployment. The host-side resolver consumes injected `IMicroBundleRepository` and inventory-observer contracts. `LocalFileSystemCompositionSessionFactory` now supplies both contracts from one explicitly rooted `FileSystemMicroBundleRepository`; this is a development adapter, not a production trust boundary. The host receives no write API through the session factory, and this integration does not expose a REST endpoint, deploy storage, or define remote authorization/provenance. Exact-address retrieval, SHA-256 verification, pinned closure preparation, and precompiled materialization are implemented and contract-tested; operational authentication, authorization, provenance policy, and storage deployment remain separate requirements.
 
 ## 7. Progress gate
 
@@ -159,7 +163,8 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Core contract checks passed 23/23; the FSM_Foundry/FSM_COS/repository host contract-check executable passed.
 - [x] Add an explicitly rooted local filesystem MicroBundleRepository adapter for development composition sessions; Core retrieval and inventory are supplied by the same repository instance.
 - [ ] Select and integrate a production persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
-- [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
+- [x] Expose a host-owned lifecycle handle and drain/stop operations for successfully activated lifecycle-capable roles; contract-test drain-before-stop, retry after transient stop failure, idempotent repeated stop, and exactly-once post-stop cleanup.
+- [ ] Replace the fixture role adapter with a real server role process and production supervision contract.
 
 
 ---
