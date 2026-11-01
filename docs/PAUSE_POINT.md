@@ -28,7 +28,7 @@
 - [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41355326065](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355326065) passed, including concurrent same-BundleId/different-version isolation and repository-backed pinned-closure/atomic-staging fixtures.
 - `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
 - `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: latest PR CI run #41351252144 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
+- Verification status: latest PR CI run #41355326065 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
 
 ## Resume sequence
 
