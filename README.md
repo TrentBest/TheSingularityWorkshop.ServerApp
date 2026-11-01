@@ -40,12 +40,20 @@ See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_
 
 ## 🟢 04 — See it in a minute
 
-There is not yet a runnable application or verified server endpoint in this repository. The first executable proof will demonstrate manifest-to-ready provisioning for one narrowly scoped server role, with tests and local run instructions.
+The first local provisioning slice is now source-added. With the .NET 8 SDK, run:
+
+```bash
+dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
+dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
+```
+
+The sample uses an in-process diagnostic adapter; it opens no network port and does not prove distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) for the contract and limitations.
 
 ## 🟪 05 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
+- [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
