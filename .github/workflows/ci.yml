@@ -15,12 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Checkout Foundry workflow source (pinned)
+      - name: Checkout FSM_Foundry workflow source (pinned)
         uses: actions/checkout@v4
         with:
-          repository: TrentBest/TheSingularityWorkshop.Foundry
+          repository: TrentBest/TheSingularityWorkshop.FSM_Foundry
           ref: 8bd3487a96af2cd7d667f62c4566a499bafe30dc
-          path: _deps/Foundry
+          path: _deps/FSM_Foundry
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
         with:
