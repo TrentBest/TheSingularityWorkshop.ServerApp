@@ -85,6 +85,9 @@ public sealed class RepositoryBackedCompositionSessionFactory(
 /// </summary>
 public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionSession
 {
+    private const int MaximumDependencyClosureBundles = 10_000;
+    private const long MaximumSingleArtifactBytes = 64L * 1024 * 1024;
+    private const long MaximumTotalArtifactBytes = 512L * 1024 * 1024;
     private readonly ServerRoleCompositionDefinition _definition;
     private readonly IMicroBundleRepository _repository;
     private readonly IMicroBundleRepositoryObserver _observer;
@@ -117,6 +120,7 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
         ArgumentNullException.ThrowIfNull(inventory);
 
         var staged = new Dictionary<ulong, IMicroBundle>();
+        long totalArtifactBytes = 0;
         var resolvedVersions = new Dictionary<ulong, string>();
         var pending = new Queue<MicroBundleVersionRequest>();
 
@@ -147,8 +151,22 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
             }
 
             var address = MicroBundleArtifactResolver.ResolveExact(new[] { request }, inventory)[request];
+            var observedLengths = inventory
+                .Where(observation => observation.Address == address)
+                .Select(observation => observation.ContentLength)
+                .Distinct()
+                .ToArray();
+            if (observedLengths.Length != 1 || observedLengths[0] < 0)
+                throw new InvalidOperationException($"Artifact '{address}' has missing or inconsistent inventory length metadata.");
+            if (observedLengths[0] > MaximumSingleArtifactBytes ||
+                observedLengths[0] > MaximumTotalArtifactBytes - totalArtifactBytes)
+                throw new InvalidOperationException($"Candidate artifact closure exceeds the configured artifact size bounds at '{address}'.");
+
             var artifact = await _repository.GetAsync(address, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"Repository did not return immutable artifact '{address}'.");
+            if (artifact.Content.Length != observedLengths[0])
+                throw new InvalidOperationException($"Retrieved artifact '{address}' does not match its observed content length.");
+            totalArtifactBytes += artifact.Content.Length;
             if (artifact.Address != address)
                 throw new InvalidOperationException(
                     $"Repository returned '{artifact.Address}' for exact request '{address}'.");
@@ -160,6 +178,9 @@ public sealed class RepositoryBackedCompositionSession : IServerRoleCompositionS
             ValidateMaterializedBundle(address, bundle);
             resolvedVersions.Add(request.BundleId, request.Version);
             staged.Add(request.BundleId, bundle);
+            if (staged.Count > MaximumDependencyClosureBundles)
+                throw new InvalidOperationException(
+                    $"Candidate dependency closure exceeds the configured maximum of {MaximumDependencyClosureBundles} MicroBundles.");
 
             foreach (var dependency in bundle.Dependencies)
             {
