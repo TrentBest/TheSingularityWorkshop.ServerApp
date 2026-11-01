@@ -64,7 +64,7 @@ The initial local coordinator performs these steps:
 5. Invoke the adapter with the manifest and cancellation token.
 6. Register the instance as `Ready` only when the adapter explicitly reports readiness; otherwise report `Failed`.
 
-The manifest cannot name an assembly, executable, shell command, URL, or arbitrary code payload. There is no dynamic code loading, network listener, distributed placement, topological batch planner, persistent registry, or hardware resource reservation in this proof. Dependencies are checked against previously Ready instances in the same coordinator process; they are not fetched, started, or ordered automatically.
+The manifest cannot name an assembly, executable, shell command, URL, or arbitrary code payload. There is no dynamic code loading, network listener, distributed placement, persistent registry, or hardware resource reservation in this proof. The separate `ProvisioningPlanBuilder` now validates a closed batch, accepts explicitly supplied already-Ready external dependencies, rejects missing/self/cyclic dependencies, and returns a deterministic topological order. It does not activate adapters or change the coordinator's single-instance behavior. The coordinator still checks dependencies against previously Ready instances in its own process.
 
 ## Role adapter contract
 
@@ -81,13 +81,13 @@ dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnost
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-The contract-check executable uses no third-party test packages. It checks successful activation, unsupported schema rejection, unknown-role fail-closed behavior, duplicate dependencies, invalid resource bounds, dependency readiness, and duplicate instance activation.
+The contract-check executable uses no third-party test packages. It checks successful activation, unsupported schema rejection, unknown-role fail-closed behavior, duplicate dependencies, invalid resource bounds, dependency readiness, duplicate instance activation, deterministic batch ordering, missing dependencies, cycle rejection, and explicitly Ready external dependencies.
 
 ## Status and next contract decisions
 
-**Source-added; GitHub Actions build and contract checks have passed.** The implementation is a first local proof, not yet a production manifest contract.
+**Source-added; the latest verified CI run covers the prior dependency-readiness slice.** The new batch planner and its contract checks are awaiting their own CI run. This remains a local planning proof, not a production manifest contract.
 
-The current dependency contract treats each dependency as a previously Ready server instance ID. The next design steps are batch/topological dependency planning, dependency lifecycle behavior when a prerequisite becomes unhealthy, resource units/limits and actual reservation, manifest provenance/signature and authorization, durable idempotency/reconciliation, adapter lifecycle and health, and the separation between requested capacity and measured capacity. Distributed placement should wait until the local lifecycle contract is stable.
+The current dependency contract treats each dependency as a server instance ID. In batch planning, dependencies must resolve to another manifest in the batch or to an instance explicitly supplied as already Ready. The planner is not yet wired to adapter activation; that integration must preserve failure propagation and cancellation semantics. Remaining design steps include dependency lifecycle behavior when a prerequisite becomes unhealthy, resource units/limits and actual reservation, manifest provenance/signature and authorization, durable idempotency/reconciliation, adapter lifecycle and health, and the separation between requested capacity and measured capacity. Distributed placement should wait until the local lifecycle contract is stable.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
