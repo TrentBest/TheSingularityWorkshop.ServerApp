@@ -3,7 +3,7 @@
 
 # Foundry Integration Boundary
 
-**Status: first Foundry → FSM_COS → role-adapter vertical slice implemented in source; candidate-scoped composition sessions added, with CI verification pending.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
+**Status: source-pinned Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -33,7 +33,10 @@ Foundry WorkflowExecutionCoordinator
        v
 ServerRoleRuntimeComposer
   RuntimeManifest (separate contract)
-  host-supplied IMicroBundleCatalog
+  candidate-private IMicroBundleCatalog
+  RepositoryBackedCompositionSession.PrepareAsync
+  exact artifact addresses + SHA-256 + pinned dependency closure
+  host-registered precompiled materializer allowlist
        |
        v
 FSM_COS FsmCos.Execute
@@ -49,11 +52,12 @@ IServerRoleRuntimeAdapter.StartAsync(manifest, assembly)
 explicit role readiness -> ServerApp result
 ```
 
-The first composed workflow host now exists in `FoundryComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, creates a fresh `IServerRoleCompositionSession` for that provisioning operation, constructs a separate `RuntimeManifest`, and composes through that session. Each session owns its own FSM_COS composer, catalog boundary, and runtime registry. The live session is retained with the successful runtime; failed or cancelled activation forgets registry metadata and disposes the candidate session. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture adapter; a production runtime adapter remains future work.
+The first composed workflow host now exists in `FoundryComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, creates a fresh `IServerRoleCompositionSession` for that provisioning operation, constructs a separate `RuntimeManifest`, and composes through that session. Each session owns its own FSM_COS composer, catalog boundary, and runtime registry. `RepositoryBackedCompositionSession.PrepareAsync` observes immutable inventory, resolves each `(BundleId, Version)` to exactly one `MicroBundleArtifactAddress`, retrieves that exact address, relies on `MicroBundleArtifact` construction to verify SHA-256, and invokes only a host-registered precompiled materializer keyed by the full address. It traverses exact-version dependency requests, rejects unpinned or conflicting dependencies, and publishes the candidate catalog only after the entire closure has been retrieved and materialized. The live session is retained with the successful runtime; failed or cancelled activation forgets registry metadata and disposes the candidate session. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture adapter; a production runtime adapter remains future work.
 
 - **ServerApp.Core** remains independent of Foundry and FSM_COS. It owns operational manifests, dependency planning, capacity placement, and fleet lifecycle contracts.
 - **Foundry** owns workflow acceptance, sequential execution through explicitly registered handlers, run snapshots, cancellation, and structured workflow outcomes.
-- **FSM_COS** owns MicroBundle composition. It resolves and validates a host-supplied catalog and returns a RuntimeAssembly to its host.
+- **MicroBundleRepository.Core** owns exact immutable artifact addresses, retrieval, inventory observation, and SHA-256 verification at `MicroBundleArtifact` construction; it does not materialize executable code.
+- **FSM_COS** owns MicroBundle composition. It resolves and validates a candidate-private catalog and returns a RuntimeAssembly to its host.
 - **The ServerApp host/integration layer** connects these contracts. It must not move orchestration into ServerApp.Core or create a second workflow runner.
 - **FSM_COS `RuntimeExperienceHost`** retains and selects composition results in host metadata. Its `TryActivate` method does not start execution; only the ServerApp role adapter can establish operational readiness.
 - **Foundry workflow context** is bounded JSON-only data. A live `RuntimeAssembly` is never serialized into it; the workflow carries only an opaque operation ID, while the host retains the assembly in private per-operation state.
@@ -75,6 +79,8 @@ Source references:
 - [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
 - [Foundry architecture](https://github.com/TrentBest/TheSingularityWorkshop.Foundry/blob/development/docs/ARCHITECTURE.md)
 
+MicroBundleRepository Core source exposes `IMicroBundleRepository.GetAsync` for complete immutable addresses, `IMicroBundleRepositoryObserver.ListAsync` for artifact inventory, `MicroBundleArtifactResolver.ResolveExact` for unambiguous ID/version-to-hash resolution, and `MicroBundleArtifact` whose constructor validates the SHA-256 of retrieved bytes. These are storage/identity contracts, not a transport server or executable loader.
+
 FSM_COS source exposes `FsmCos.Execute` / `TryExecute`, `RuntimeManifest`, and `RuntimeAssembly`. The assembly contains composed MicroBundles; it is not itself a started server process or a Foundry workflow. See [FsmCos.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/FsmCos.cs), [RuntimeManifest.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeManifest.cs), and [RuntimeAssembly.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeAssembly.cs).
 
 ## 4. Implemented composed workflow proof
@@ -82,14 +88,14 @@ FSM_COS source exposes `FsmCos.Execute` / `TryExecute`, `RuntimeManifest`, and `
 `FoundryComposedProvisioningHost` submits a fixed, host-authored workflow with three sequential steps:
 
 1. **Validate role:** validate and snapshot the operational manifest, resolve the approved role definition, and require a registered runtime adapter.
-2. **Compose runtime:** create a candidate-scoped composition session, construct a new FSM_COS `RuntimeManifest` from the approved root list and a host-assigned runtime ID, and compose through the session's private `IFsmCos`/`IMicroBundleCatalog` pair.
+2. **Compose runtime:** create a candidate-scoped composition session; await its `PrepareAsync` to resolve, retrieve, hash-verify, and precompiled-materialize the complete pinned dependency closure; then construct a new FSM_COS `RuntimeManifest` from the approved root list and a host-assigned runtime ID and compose through the session's private `IFsmCos`/`IMicroBundleCatalog` pair.
 3. **Activate role:** select the composed assembly in FSM_COS host metadata, pass the live `RuntimeAssembly` to the registered `IServerRoleRuntimeAdapter`, and report `Ready` only when the adapter returns `IsReady=true`.
 
 The role definition catalog is host-owned and maps exact `RoleId` values to immutable root bundle/version requests. The client-facing `ServerRoleManifest` contains no bundle IDs, type names, assembly paths, or executable workflow steps. This prevents a provisioning request from choosing arbitrary MicroBundles or handlers.
 
 The Foundry workflow context contains only a GUID correlation value. Live `RuntimeAssembly` references remain in a private host operation dictionary because Foundry context is explicitly bounded JSON data, not an object transport or runtime container.
 
-Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, a not-ready adapter fails the workflow, and two concurrent candidates can resolve different versions of the same BundleId from isolated catalogs. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
+Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, a not-ready adapter fails the workflow, two concurrent candidates can resolve different versions of the same BundleId from isolated catalogs, exact artifact retrieval and transitive version pins prepare successfully, and a missing transitive artifact prevents partial catalog publication or composition. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
 
 Foundry workflow success means every registered step completed. ServerApp's `Ready` state is written only after the role adapter confirms readiness. FSM_COS registry selection is metadata, not execution. Neither a successful composition nor a successful workflow proves a production listener, health endpoint, or distributed host.
 
@@ -104,6 +110,7 @@ Both Foundry and FSM_COS are built from pinned source; no new NuGet package is r
 | [FSM_API](https://github.com/TrentBest/FSM_API) | `4db572f5e0e74df028b01ee22fb393e2bd203eb6` |
 | [FSM_UserIO](https://github.com/TrentBest/FSM_UserIO) | `db5b59d0521a341f97e6077e3508eb2bd7171607` |
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
+| [MicroBundleRepository](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository) | `2b23967262766a0466b263e0838afbf8affd234b` |
 
 FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
@@ -142,6 +149,8 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] RuntimeAssembly passed to an explicit ServerApp role adapter; Foundry workflow context carries only an opaque operation ID.
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
 - [x] Candidate-scoped session abstraction gives every provisioning operation its own FSM_COS composer/catalog boundary and runtime registry; successful sessions remain retained with their runtime.
+- [x] Repository-backed candidate preparation resolves exact immutable artifact addresses, retrieves and SHA-256 verifies each artifact, enforces exact-version transitive dependencies, and atomically publishes a private catalog only after full preparation.
+- [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; artifact bytes are never loaded as assemblies or scripts.
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
 - [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Foundry/FSM_COS host contract-check executable passed.
