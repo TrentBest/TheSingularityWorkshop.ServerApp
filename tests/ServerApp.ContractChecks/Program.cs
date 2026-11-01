@@ -21,7 +21,9 @@ var checks = new (string Name, Func<Task> Run)[]
     ("invalid batch plan activates nothing", InvalidBatchPlanActivatesNothing),
     ("host placement is deterministic and accounts for capacity", HostPlacementIsDeterministic),
     ("host placement reports insufficient capacity", HostPlacementReportsInsufficientCapacity),
-    ("host placement rejects duplicate host identifiers", HostPlacementRejectsDuplicateHosts)
+    ("host placement rejects duplicate host identifiers", HostPlacementRejectsDuplicateHosts),
+    ("host placement rejects invalid host snapshots", HostPlacementRejectsInvalidHosts),
+    ("host placement continues independent instances when one cannot fit", HostPlacementContinuesIndependentInstances)
 };
 
 var failures = new List<string>();
@@ -319,6 +321,34 @@ static Task HostPlacementRejectsDuplicateHosts()
     var result = HostPlacementPlanner.Build([ValidManifest()], hosts);
     Assert(!result.PlanAccepted && result.Errors.Any(e => e.Code == "placement.host.duplicate"),
         "Duplicate host identifiers were accepted.");
+    return Task.CompletedTask;
+}
+
+static Task HostPlacementRejectsInvalidHosts()
+{
+    var result = HostPlacementPlanner.Build([ValidManifest()],
+        [new HostCapacityProfile("", 0, 32)]);
+    Assert(!result.PlanAccepted && result.Placements.Count == 0 &&
+           result.Errors.Any(e => e.Code == "placement.host.id") &&
+           result.Errors.Any(e => e.Code == "placement.host.cpu") &&
+           result.Errors.Any(e => e.Code == "placement.host.memory"),
+        "Invalid host identity or capacity was accepted.");
+    return Task.CompletedTask;
+}
+
+static Task HostPlacementContinuesIndependentInstances()
+{
+    var manifests = new[]
+    {
+        ValidManifest() with { InstanceId = "too-large", Resources = new ResourceRequirements { CpuCores = 3, MemoryMiB = 512 } },
+        ValidManifest() with { InstanceId = "fits" }
+    };
+    var result = HostPlacementPlanner.Build(manifests,
+        [new HostCapacityProfile("host-a", 2, 256)]);
+    Assert(result.PlanAccepted && !result.IsFullyPlaced &&
+           result.UnplacedInstances.Single().InstanceId == "too-large" &&
+           result.Placements.Single().InstanceId == "fits",
+        "An unplaceable instance prevented an independent instance from being placed.");
     return Task.CompletedTask;
 }
 
