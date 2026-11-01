@@ -45,6 +45,9 @@ public sealed class ServerRoleLifecycleController
     private readonly IServerRoleCompositionSession _session;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ServerRoleLifecycleState _state = ServerRoleLifecycleState.Running;
+    private bool _roleStopConfirmed;
+    private bool _registryForgotten;
+    private bool _sessionDisposed;
 
     public ServerRoleLifecycleController(
         ServerRoleManifest manifest,
@@ -105,46 +108,61 @@ public sealed class ServerRoleLifecycleController
         {
             if (_state == ServerRoleLifecycleState.Stopped)
                 return;
-            if (_state == ServerRoleLifecycleState.Running)
+
+            if (!_roleStopConfirmed)
             {
-                _state = ServerRoleLifecycleState.Draining;
+                if (_state == ServerRoleLifecycleState.Running)
+                {
+                    _state = ServerRoleLifecycleState.Draining;
+                    try
+                    {
+                        var drain = await _adapter.DrainAsync(_manifest, _assembly, cancellationToken)
+                            .ConfigureAwait(false);
+                        if (!drain.Succeeded)
+                            throw new InvalidOperationException(drain.Detail);
+                        _state = ServerRoleLifecycleState.Drained;
+                    }
+                    catch
+                    {
+                        _state = ServerRoleLifecycleState.Running;
+                        throw;
+                    }
+                }
+
+                if (_state != ServerRoleLifecycleState.Drained)
+                    throw new InvalidOperationException($"Cannot stop a role while it is {_state}.");
+
+                _state = ServerRoleLifecycleState.Stopping;
                 try
                 {
-                    var drain = await _adapter.DrainAsync(_manifest, _assembly, cancellationToken)
+                    var stop = await _adapter.StopAsync(_manifest, _assembly, cancellationToken)
                         .ConfigureAwait(false);
-                    if (!drain.Succeeded)
-                        throw new InvalidOperationException(drain.Detail);
-                    _state = ServerRoleLifecycleState.Drained;
+                    if (!stop.Succeeded)
+                        throw new InvalidOperationException(stop.Detail);
+                    _roleStopConfirmed = true;
                 }
                 catch
                 {
-                    _state = ServerRoleLifecycleState.Running;
+                    _state = ServerRoleLifecycleState.Drained;
                     throw;
                 }
             }
 
-            if (_state != ServerRoleLifecycleState.Drained)
-                throw new InvalidOperationException($"Cannot stop a role while it is {_state}.");
-
+            // Once stop is confirmed, retries resume cleanup without asking the role to stop twice.
             _state = ServerRoleLifecycleState.Stopping;
-            RoleLifecycleResult stop;
-            try
+            if (!_registryForgotten)
             {
-                stop = await _adapter.StopAsync(_manifest, _assembly, cancellationToken)
-                    .ConfigureAwait(false);
-                if (!stop.Succeeded)
-                    throw new InvalidOperationException(stop.Detail);
-            }
-            catch
-            {
-                _state = ServerRoleLifecycleState.Drained;
-                throw;
+                _session.Forget(_assembly.RuntimeId);
+                _registryForgotten = true;
             }
 
-            // The adapter has confirmed process/role stop. Cleanup is now safe to attempt.
+            if (!_sessionDisposed)
+            {
+                await _session.DisposeAsync().ConfigureAwait(false);
+                _sessionDisposed = true;
+            }
+
             _state = ServerRoleLifecycleState.Stopped;
-            _session.Forget(_assembly.RuntimeId);
-            await _session.DisposeAsync().ConfigureAwait(false);
         }
         finally
         {
