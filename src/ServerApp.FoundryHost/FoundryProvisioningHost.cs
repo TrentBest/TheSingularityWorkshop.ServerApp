@@ -99,7 +99,8 @@ public sealed class FoundryProvisioningHost : IAsyncDisposable
     private async ValueTask ProvisionRoleAsync(
         WorkflowExecutionContext context, CancellationToken cancellationToken)
     {
-        var manifest = context.GetInput<ServerRoleManifest>(ManifestInputKey);
+        var manifest = context.GetInput<ServerRoleManifest>(ManifestInputKey)
+            ?? throw new InvalidOperationException("The provisioning workflow has no server-role manifest input.");
         var result = await _provisioner.ProvisionAsync(manifest, cancellationToken).ConfigureAwait(false);
         context.SetOutput(ProvisioningOutputKey, result);
 
