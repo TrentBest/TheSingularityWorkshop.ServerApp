@@ -345,7 +345,14 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         await _workflows.DisposeAsync().ConfigureAwait(false);
         foreach (var state in _operations.Values)
         {
-            if (state.Session is not null)
+            if (state.Lifecycle is not null &&
+                state.Lifecycle.State != ServerRoleLifecycleState.Stopped)
+            {
+                await state.Lifecycle.StopAsync().ConfigureAwait(false);
+                state.Session = null;
+                state.Assembly = null;
+            }
+            else if (state.Session is not null)
             {
                 await state.Session.DisposeAsync().ConfigureAwait(false);
                 state.Session = null;
