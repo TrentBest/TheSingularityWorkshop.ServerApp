@@ -19,6 +19,7 @@ public sealed class FoundryProvisioningHost : IAsyncDisposable
     private readonly WorkflowExecutionCoordinator _workflows;
     private readonly ConcurrentDictionary<string, Guid> _pendingInstances = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<Guid, string> _runInstances = new();
+    private readonly ConcurrentDictionary<Guid, WorkflowExecutionContext> _contexts = new();
 
     public FoundryProvisioningHost(IEnumerable<IServerRoleAdapter> roleAdapters)
     {
@@ -52,6 +53,7 @@ public sealed class FoundryProvisioningHost : IAsyncDisposable
             var snapshot = _workflows.Submit(definition, context);
             _pendingInstances[manifest.InstanceId] = snapshot.RunId;
             _runInstances[snapshot.RunId] = manifest.InstanceId;
+            _contexts[snapshot.RunId] = context;
             return snapshot;
         }
         catch
@@ -86,10 +88,10 @@ public sealed class FoundryProvisioningHost : IAsyncDisposable
     public WorkflowRunSnapshot GetSnapshot(Guid runId) => _workflows.GetSnapshot(runId);
 
     /// <summary>Reads the Core provisioning result produced by the registered workflow handler.</summary>
-    public ProvisioningResult? GetProvisioningResult(Guid runId, WorkflowExecutionContext context)
+    public ProvisioningResult? GetProvisioningResult(Guid runId)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        return context.TryGetOutput(ProvisioningOutputKey, out ProvisioningResult? result)
+        return _contexts.TryGetValue(runId, out var context) &&
+               context.TryGetOutput(ProvisioningOutputKey, out ProvisioningResult? result)
             ? result
             : null;
     }
