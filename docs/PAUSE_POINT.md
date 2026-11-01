@@ -22,11 +22,13 @@
 - `src/ServerApp.FoundryHost/FoundryProvisioningHost.cs`: Core-only Foundry workflow fixture; `FoundryComposedProvisioningHost.cs` runs validate → FSM_COS compose → role activation through the actual Foundry coordinator.
 - `src/ServerApp.FoundryHost/ServerRoleRuntimeComposition.cs`: host-owned role-to-approved-root catalog, process-local runtime IDs, session creation, and `IServerRoleRuntimeAdapter` contract.
 - `src/ServerApp.FoundryHost/ServerRoleCompositionSessions.cs`: per-candidate FSM_COS composer/catalog boundary and runtime registry; successful sessions are retained with the live runtime.
+- `src/ServerApp.FoundryHost/ServerRoleLifecycle.cs`: adapter capability and serialized lifecycle controller; successful stop gates registry removal and composition-session disposal, with cleanup retry that does not repeat a confirmed role stop.
+- `FoundryComposedProvisioningHost`: exposes lifecycle handles plus `DrainRoleAsync` and `StopRoleAsync` for adapters implementing `IServerRoleLifecycleAdapter.
 - `src/ServerApp.FoundryHost/RepositoryBackedCompositionSession.cs`: exact inventory resolution, immutable artifact retrieval, SHA-256 verification, exact-version transitive dependency closure, atomic catalog publication, and host-registered precompiled materializer allowlist.
 - `src/ServerApp.FoundryHost/LocalFileSystemCompositionSessionFactory.cs`: development-only adapter wiring one explicitly rooted `FileSystemMicroBundleRepository` as both artifact retriever and inventory observer; no write endpoint or production trust policy is exposed.
 - MicroBundleRepository Core source pinned in CI at `2b23967262766a0466b263e0838afbf8affd234b`.
 - [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41355604754](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355604754) passed, including concurrent same-BundleId/different-version isolation repository-backed pinned-closure/atomic-staging fixtures, persisted filesystem retrieval, wrong-address rejection, invalid materializer rejection, and unpinned dependency rejection.
-- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
+- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry workflow lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, role readiness gating, role drain, transient stop failure/retry, idempotent stop, and exactly-once cleanup.
 - `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
 - Verification status: latest PR CI run #41355604754 passed: Core contract checks 23/23 and FSM_Foundry/FSM_COS host contract checks passed against pinned source dependencies.
 
@@ -36,7 +38,7 @@
 2. Follow the six-repository pinned source checkout instructions in [FSM_Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
 3. Keep the passing pinned-source CI path intact; any integration change must retain exact-SHA build and contract-check evidence.
 4. Use the local filesystem adapter for deterministic development persistence, then select a production storage adapter and define operational authentication, authorization, provenance, and observability. The host-side resolver and precompiled materializer boundary remain separate from executable loading; no REST listener or production repository deployment is implied.
-5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
+5. Implement the first real server-role process adapter and connect its operational drain/stop evidence to the now-tested host lifecycle contract; do not assume FSM_COS unloads bundles.
 6. Add readiness/health contracts and idempotent instance reconciliation.
 7. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
 8. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
