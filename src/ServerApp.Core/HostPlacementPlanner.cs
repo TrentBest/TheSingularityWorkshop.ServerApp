@@ -75,9 +75,22 @@ public static class HostPlacementPlanner
             .ToArray();
         var placements = new List<HostPlacement>();
         var unplaced = new List<UnplacedInstance>();
+        var placedIds = new HashSet<string>(
+            alreadyReadyInstanceIds ?? Array.Empty<string>(), StringComparer.Ordinal);
 
         foreach (var manifest in plan.OrderedManifests)
         {
+            var unavailableDependencies = manifest.Dependencies
+                .Where(dependency => !placedIds.Contains(dependency))
+                .ToArray();
+
+            if (unavailableDependencies.Length > 0)
+            {
+                unplaced.Add(new(manifest.InstanceId,
+                    $"Not placed because dependency instance(s) could not be placed: {string.Join(", ", unavailableDependencies)}."));
+                continue;
+            }
+
             var host = capacity.FirstOrDefault(candidate =>
                 candidate.RemainingCpuCores >= manifest.Resources.CpuCores &&
                 candidate.RemainingMemoryMiB >= manifest.Resources.MemoryMiB);
@@ -93,6 +106,7 @@ public static class HostPlacementPlanner
             host.RemainingMemoryMiB -= manifest.Resources.MemoryMiB;
             placements.Add(new(manifest.InstanceId, host.HostId,
                 host.RemainingCpuCores, host.RemainingMemoryMiB));
+            placedIds.Add(manifest.InstanceId);
         }
 
         return new(true, placements, unplaced, Array.Empty<ManifestValidationError>());
