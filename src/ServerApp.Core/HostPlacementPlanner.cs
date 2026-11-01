@@ -60,7 +60,7 @@ public static class HostPlacementPlanner
 
             if (host.CpuCores < 1 || host.CpuCores > 1_048_576)
                 errors.Add(new("placement.host.cpu", $"Host '{host.HostId}' CpuCores must be between 1 and 1048576."));
-            if (host.MemoryMiB < 64 || host.MemoryMiB > int.MaxValue)
+            if (host.MemoryMiB < 64)
                 errors.Add(new("placement.host.memory", $"Host '{host.HostId}' MemoryMiB must be at least 64."));
         }
 
