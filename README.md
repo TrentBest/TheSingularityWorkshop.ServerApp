@@ -70,7 +70,7 @@ git -C _deps/MicroBundleRepository checkout 2b23967262766a0466b263e0838afbf8affd
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove a concrete persistent/network repository deployment, production role process, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [FSM_Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition, Foundry workflow execution, and the host-owned drain/stop/cleanup lifecycle contract. They open no network port and do not prove a concrete persistent/network repository deployment, production role process supervision, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [FSM_Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 06 — Documentation and next steps
 
@@ -81,7 +81,7 @@ The diagnostic adapter and composed role adapters are in-process fixtures; the c
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
-The next milestone is a concrete persistent/network MicroBundleRepository adapter with operational authorization and provenance policy, followed by a real server-role process with explicit stop/drain/cleanup. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment remain separate milestones with independently verified contracts.
+The next milestones are a concrete persistent/network MicroBundleRepository adapter with operational authorization and provenance policy, followed by a real server-role process adapter that supplies operational evidence to the now-implemented host drain/stop/cleanup contract. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment remain separate milestones with independently verified contracts.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
