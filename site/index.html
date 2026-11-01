@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>ServerApp · Fleet Observatory</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#131f31;--line:#26364c;--ink:#edf4ff;--muted:#a9bad0;--accent:#7dd3fc;--good:#86efac;--warn:#fcd34d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#18324a 0,transparent 42%),var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1100px;margin:auto;padding:36px 22px 70px}.brand{display:flex;align-items:center;gap:14px;margin-bottom:42px}.mark{width:42px;height:42px;border:1px solid #5b8ba8;border-radius:14px;display:grid;place-items:center;color:var(--accent);font-size:24px}.eyebrow{color:var(--accent);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700}h1{font-size:clamp(2.3rem,6vw,4.8rem);line-height:1.02;letter-spacing:-.05em;margin:.3rem 0 1rem}h2{font-size:1.35rem;margin:0 0 12px}p{color:var(--muted);margin:.5rem 0 1rem}.hero{max-width:800px;margin-bottom:34px}.hero p{font-size:1.12rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:20px 0 34px}.panel{background:linear-gradient(145deg,#17263a,#111b2b);border:1px solid var(--line);border-radius:18px;padding:20px}.status{display:inline-flex;align-items:center;gap:8px;border:1px solid #326b51;border-radius:99px;padding:4px 10px;color:var(--good);font-size:.82rem}.dot{width:8px;height:8px;border-radius:50%;background:var(--good)}.tag{display:inline-block;border:1px solid var(--line);border-radius:7px;padding:2px 8px;color:var(--muted);font-size:.78rem;margin:3px 4px 3px 0}.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:stretch}.step{border:1px solid var(--line);border-radius:12px;padding:14px;background:#0d1726}.step b{display:block;color:var(--accent);margin-bottom:4px}.step small{color:var(--muted)}pre{overflow:auto;background:#08111e;border:1px solid var(--line);border-radius:12px;padding:16px;color:#c9e6ff;font-size:.9rem}.links{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.note{border-left:3px solid var(--warn);padding:8px 14px;background:#241f14;border-radius:0 9px 9px 0;color:#f4dfaa}.foot{border-top:1px solid var(--line);margin-top:42px;padding-top:20px;font-size:.88rem;color:var(--muted)}
+</style>
+</head>
+<body><main>
+<header class="brand"><div class="mark">✳</div><div><div class="eyebrow">The Singularity Workshop</div><strong>ServerApp / Fleet Observatory</strong></div></header>
+<section class="hero"><div class="eyebrow">Manifest-driven infrastructure</div><h1>From declared role<br>to operational fleet.</h1><p>ServerApp is the Workshop's server-role host and fleet platform. This observatory makes its contracts, proof sequence, and current evidence visible while the runtime is being built.</p><span class="status"><i class="dot"></i> Static architecture observatory · GitHub Pages</span></section>
+<section class="grid">
+<article class="panel"><div class="eyebrow">Contract</div><h2>Server Role Manifest v1</h2><p>A bounded, versioned declaration of role identity, dependencies, and resource requirements. Unknown fields and invalid resource bounds fail closed.</p><span class="tag">JSON</span><span class="tag">Schema v1</span><span class="tag">Validated input</span><p><a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/blob/development/schemas/server-role-manifest.v1.schema.json">Inspect JSON Schema →</a></p></article>
+<article class="panel"><div class="eyebrow">First executable slice</div><h2>Diagnostic readiness</h2><p>The local CLI reads a manifest, validates it, resolves an explicitly registered adapter, and reports Ready only when that adapter reports ready.</p><span class="tag">.NET 8</span><span class="tag">In-process</span><span class="tag">No listener</span><p><a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/tree/development/src">Inspect source →</a></p></article>
+<article class="panel"><div class="eyebrow">Evidence boundary</div><h2>CI verified</h2><p>GitHub Actions has successfully built the CLI/Core and run the dependency-free contract checks on the development branch.</p><span class="tag">Build</span><span class="tag">Contract checks</span><span class="tag">Push workflow</span><p><a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions">View workflow history →</a></p></article>
+</section>
+<section class="panel"><div class="eyebrow">Provisioning lifecycle</div><h2>The intended control path</h2><p>The first slice proves only the first narrow transition. The remaining stages are the engineering roadmap, not live fleet capabilities.</p>
+<div class="flow">
+<div class="step"><b>01 · Declare</b><small>Role manifest</small></div><div class="step"><b>02 · Validate</b><small>Schema, policy, identity</small></div><div class="step"><b>03 · Resolve</b><small>Trusted dependencies</small></div><div class="step"><b>04 · Place</b><small>Capacity and hardware fit</small></div><div class="step"><b>05 · Activate</b><small>Approved role adapter</small></div><div class="step"><b>06 · Observe</b><small>Health, readiness, routing</small></div>
+</div></section>
+<section class="grid">
+<article class="panel"><div class="eyebrow">Manifest example</div><h2>diagnostic.ready</h2><pre>{
+  "schemaVersion": 1,
+  "instanceId": "local-diagnostic-001",
+  "roleId": "diagnostic.ready",
+  "dependencies": [],
+  "resources": {
+    "cpuCores": 1,
+    "memoryMiB": 128
+  }
+}</pre><a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/blob/development/examples/diagnostic-ready.serverapp.json">Open example manifest →</a></article>
+<article class="panel"><div class="eyebrow">System boundaries</div><h2>Keep responsibilities distinct</h2><p><b>FSM_COS</b> composes trusted MicroBundles. <b>FSM_API</b> provides state/context execution primitives. <b>ServerApp</b> hosts and operates server roles. A successful composition is not proof of a healthy service.</p><p>Artifacts retain BundleId + Version + ContentHash identity. Manifests are declarative—not arbitrary shell or code-loading instructions.</p></article>
+</section>
+<section class="panel"><div class="eyebrow">Not yet claimed</div><h2>What this page does not represent</h2><p class="note">This is a static documentation and evidence surface. It does not connect to a live server fleet, provision cloud resources, expose a control API, or report real-time service health.</p><p>Distributed placement, dependency orchestration, authentication, persistent state, horizontal scaling, client I/O routing, rendering transport, and production deployment remain separate proof milestones.</p></section>
+<footer class="foot">The Singularity Workshop · ServerApp · <a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp">Repository</a> · <a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/blob/development/docs/ARCHITECTURE.md">Architecture</a> · <a href="https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/blob/development/docs/SERVER_FLEET_MODEL.md">Fleet model</a></footer>
+</main></body></html>
