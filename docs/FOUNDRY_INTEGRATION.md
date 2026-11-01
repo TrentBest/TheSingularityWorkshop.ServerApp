@@ -3,7 +3,7 @@
 
 # Foundry Integration Boundary
 
-**Status: source-pinned Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
+**Status: source-pinned Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed.** ServerApp submits a three-step provisioning workflow to Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -133,7 +133,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
@@ -154,7 +154,7 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Repository-backed candidate preparation resolves exact immutable artifact addresses, retrieves and SHA-256 verifies each artifact, enforces exact-version transitive dependencies, and atomically publishes a private catalog only after full preparation.
 - [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; artifact bytes are never loaded as assemblies or scripts.
 - [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
-- [x] CI run [#41341468549](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341468549) passed with six exact source dependencies pinned.
+- [x] CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with six exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Foundry/FSM_COS/repository host contract-check executable passed.
 - [ ] Integrate a concrete persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
 - [ ] Replace the fixture role adapter with a real server role host and explicit stop/drain/cleanup contract.
