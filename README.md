@@ -5,7 +5,7 @@
 
 **ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
-This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No runnable server, public endpoint, authentication service, scheduler, persistence system, or deployment workflow is claimed here.
+This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No production server, public endpoint, authentication service, scheduler, durable role-state system, or deployment workflow is claimed here. The Foundry host integration now includes candidate-scoped MicroBundle artifact preparation and an explicitly rooted local filesystem repository adapter for development; this is not production storage or a deployed server.
 
 This document follows the Workshop's [Documentation Standard](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/master/DOCUMENTATION_STANDARD.md). See [Agent Onboarding](AGENTS.md) before contributing.
 
