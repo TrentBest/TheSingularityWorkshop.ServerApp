@@ -45,14 +45,14 @@ Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingu
 
 ## 🟢 05 — See it in a minute
 
-The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 8 SDK, run the diagnostic Core checks:
+The local manifest-to-ready proof, Foundry/FSM_COS workflow, candidate-isolated composition sessions, and repository-backed artifact preparation boundary are source-implemented. The latter resolves exact immutable artifacts, verifies SHA-256, enforces pinned transitive dependencies, and invokes only host-registered precompiled materializers; it does not dynamically load artifact bytes. With the .NET 8 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-To build and run the composed Foundry/FSM_COS integration checks, first place the five source repositories at the exact revisions used by CI:
+To build and run the composed Foundry/FSM_COS integration checks, first place the six source repositories at the exact revisions used by CI:
 
 ```bash
 git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
@@ -68,7 +68,7 @@ git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591ae
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove a concrete persistent/network repository deployment, production role process, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 06 — Documentation and next steps
 
@@ -79,7 +79,7 @@ The diagnostic adapter and composed role adapters are in-process fixtures; the c
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
-The first milestone is a validated role manifest and one deterministic local provisioning path. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment should be separate milestones with independently verified contracts.
+The next milestone is a concrete persistent/network MicroBundleRepository adapter with operational authorization and provenance policy, followed by a real server-role process with explicit stop/drain/cleanup. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment remain separate milestones with independently verified contracts.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
