@@ -124,7 +124,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. CI passed with 10 documentation/compiler warnings originating in the pinned FSM_API and FSM_COS source projects; there were zero build errors, and the ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
@@ -141,7 +141,9 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] FSM_COS composition handoff implemented through a separate host-owned RuntimeManifest and approved role-definition catalog.
 - [x] RuntimeAssembly passed to an explicit ServerApp role adapter; Foundry workflow context carries only an opaque operation ID.
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
-- [ ] CI build and both contract-check executables pass for the latest exact ServerApp commit and all pinned source revisions.
+- [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
+- [x] Core contract checks passed 23/23; the Foundry/FSM_COS host contract-check executable passed.
+- [ ] Replace the in-memory MicroBundle catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
 - [ ] Replace the in-memory catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
 
 ---
