@@ -187,10 +187,10 @@ internal static class Program
         Assert(results.All(result => result.Status == WorkflowStatus.Succeeded),
             "both concurrent candidates should compose and activate successfully");
         Assert(adapterV1.ReceivedAssembly?.TryGetBundle(500, out var bundleV1) == true &&
-               bundleV1.Descriptor.Version == "1.0.0",
+               bundleV1?.Descriptor.Version == "1.0.0",
             "the first candidate must resolve its own 1.0.0 catalog entry");
         Assert(adapterV2.ReceivedAssembly?.TryGetBundle(500, out var bundleV2) == true &&
-               bundleV2.Descriptor.Version == "2.0.0",
+               bundleV2?.Descriptor.Version == "2.0.0",
             "the second candidate must resolve its own 2.0.0 catalog entry");
         Assert(adapterV1.ReceivedAssembly!.RuntimeId != adapterV2.ReceivedAssembly!.RuntimeId,
             "candidate sessions must retain distinct runtime identities");
