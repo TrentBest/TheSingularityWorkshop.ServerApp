@@ -16,7 +16,7 @@ ServerApp is not one monolithic backend. It coordinates a fleet of distinct serv
 | System | Established or intended responsibility |
 |---|---|
 | FSM_COS | Composition kernel: resolves/validates a host-supplied MicroBundle catalog, composes dependencies, performs bounded arbitration, and returns a RuntimeAssembly. |
-| FSM_API | State/context and process-group execution primitives. Do not create a competing semantic tick or heartbeat. |
+| FSM_API | State/context and process-group execution primitives. Do not create a competing semantic tick or heartbeat. |\n| Foundry | Owns the ServerApp provisioning workflow lifecycle through the source-pinned host integration. It does not compose FSM_COS runtimes. |
 | AnyApp | Desktop host and desktop presentation. |
 | WebApp | Browser-facing host and browser presentation; independent of desktop AnyApp. |
 | ServerApp | Server fleet provisioning, role hosting, routing/coordination boundaries, capacity placement, and server operational lifecycle. |
@@ -155,7 +155,7 @@ The first role should be selected to minimize external dependencies while provin
 
 A first source implementation now exists under `src/ServerApp.Core` and `src/ServerApp.Cli`. It defines a version-1 server-role manifest, bounded validation, an explicit registered role-adapter interface, and a local provisioning coordinator that reports readiness only when the adapter reports ready. The sample `diagnostic.ready` adapter is in-process and opens no network listener.
 
-A dependency-free contract-check executable is under `tests/ServerApp.ContractChecks`; GitHub Actions build/contract-check automation is defined in `.github/workflows/ci.yml`. These are source additions only until a workflow run or local build is observed. The first slice checks declared dependencies against previously Ready instance IDs in the same in-process coordinator. `ProvisioningPlanBuilder` validates closed batches, rejects missing/self/cyclic dependencies, and creates a deterministic topological order. `BatchProvisioningCoordinator` activates that order sequentially, skips dependents after prerequisite failure, and continues independent branches. These remain in-process proofs: they do not reserve hardware, persist instances, schedule across hosts, load arbitrary code, or create a production server. See [Server Role Manifest](SERVER_ROLE_MANIFEST.md).
+A dependency-free contract-check executable is under `tests/ServerApp.ContractChecks`. The dedicated `ServerApp.FoundryHost` project submits provisioning requests to Foundry's actual `WorkflowExecutionCoordinator`; the source is pinned to Foundry commit `8bd3487a96af2cd7d667f62c4566a499bafe30dc` in CI. Its contract checks cover readiness, not-ready failure, duplicate pending requests, and cancellation before start. This proves workflow ownership and role-readiness reporting, but not FSM_COS composition or production role hosting. GitHub Actions builds the host integration and runs both contract-check executables; verify the exact run before describing this change as CI-passed. The first slice checks declared dependencies against previously Ready instance IDs in the same in-process coordinator. `ProvisioningPlanBuilder` validates closed batches, rejects missing/self/cyclic dependencies, and creates a deterministic topological order. `BatchProvisioningCoordinator` activates that order sequentially, skips dependents after prerequisite failure, and continues independent branches. These remain in-process proofs: they do not reserve hardware, persist instances, schedule across hosts, load arbitrary code, or create a production server. See [Server Role Manifest](SERVER_ROLE_MANIFEST.md).
 
 ### 8.1 Deterministic host-capacity placement proof
 
@@ -165,7 +165,7 @@ This is only an in-memory placement calculation. It does not reserve hardware, m
 
 ## 9. Maturity and open engineering questions
 
-Current status: **conceptual architecture / repository bootstrap**. This document records product direction, not implemented capabilities. No runnable server, API, authentication authority, token protocol, database, scheduler, rendering transport, deployment workflow, or production security posture is established yet.
+Current status: **architecture bootstrap with a source-pinned Foundry workflow host integration**. The local manifest/placement proofs and Foundry workflow adapter are source-implemented; production server hosting is not. No network server, API, authentication authority, token protocol, database, distributed scheduler, rendering transport, deployment workflow, or production security posture is established yet.
 
 Key questions to resolve through design and small proofs:
 - What is the first manifest schema and versioning/compatibility policy?
