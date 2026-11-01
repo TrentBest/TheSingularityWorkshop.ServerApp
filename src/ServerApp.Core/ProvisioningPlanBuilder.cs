@@ -31,7 +31,7 @@ public static class ProvisioningPlanBuilder
         var byId = new Dictionary<string, ServerRoleManifest>(StringComparer.Ordinal);
         foreach (var manifest in batch)
         {
-            if (string.IsNullOrWhiteSpace(manifest.InstanceId))
+            if (manifest is null || string.IsNullOrWhiteSpace(manifest.InstanceId))
                 continue;
 
             if (!byId.TryAdd(manifest.InstanceId, manifest))
@@ -41,7 +41,7 @@ public static class ProvisioningPlanBuilder
 
         foreach (var manifest in batch)
         {
-            if (string.IsNullOrWhiteSpace(manifest.InstanceId) || manifest.Dependencies is null)
+            if (manifest is null || string.IsNullOrWhiteSpace(manifest.InstanceId) || manifest.Dependencies is null)
                 continue;
 
             foreach (var dependency in manifest.Dependencies)
