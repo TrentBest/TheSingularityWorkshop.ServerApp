@@ -4,8 +4,11 @@
 # ServerApp Documentation
 
 - [README](README.md) — project orientation and current maturity.
-- [Architecture and Open Decisions](docs/ARCHITECTURE.md) — responsibilities, boundaries, and the initial product decision.
+- [Architecture](docs/ARCHITECTURE.md) — system boundaries, server-role taxonomy, manifest-driven provisioning, and proof sequence.
+- [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — product vision captured 2026-11-01, including landing experiences, service roles, authentication flow, elastic Experience compute, and Renderer.
 - [Agent Onboarding](AGENTS.md) — contribution and repository rules.
+- [Pause Point](docs/PAUSE_POINT.md) — current checkpoint and resume sequence.
+- [Branch Reconciliation](docs/BRANCH_RECONCILIATION.md) — canonical branch model and reconciliation record.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
