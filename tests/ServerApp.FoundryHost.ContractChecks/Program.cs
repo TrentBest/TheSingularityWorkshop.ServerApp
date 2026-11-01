@@ -1,5 +1,7 @@
 using ServerApp.Core;
 using ServerApp.FoundryHost;
+using System.Security.Cryptography;
+using TheSingularityWorkshop.MicroBundleRepository.Core;
 using TheSingularityWorkshop.FSM_COS;
 using TheSingularityWorkshop.Foundry;
 using TheSingularityWorkshop.MicroBundleDomain;
@@ -17,6 +19,8 @@ internal static class Program
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         await ConcurrentCandidatesHaveIsolatedCatalogs();
+        await RepositorySessionPreparesVerifiedPinnedDependencyClosure();
+        await RepositorySessionDoesNotPublishPartialClosure();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -196,6 +200,87 @@ internal static class Program
             "candidate sessions must retain distinct runtime identities");
     }
 
+    private static async Task RepositorySessionPreparesVerifiedPinnedDependencyClosure()
+    {
+        var loadOrder = new List<ulong>();
+        var rootBytes = System.Text.Encoding.UTF8.GetBytes("root artifact bytes");
+        var dependencyBytes = System.Text.Encoding.UTF8.GetBytes("dependency artifact bytes");
+        var rootAddress = CreateAddress(600, "1.0.0", rootBytes);
+        var dependencyAddress = CreateAddress(601, "2.0.0", dependencyBytes);
+        var rootArtifact = new MicroBundleArtifact(rootAddress, rootBytes);
+        var dependencyArtifact = new MicroBundleArtifact(dependencyAddress, dependencyBytes);
+        var repository = new TestArtifactRepository(rootArtifact, dependencyArtifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+                rootAddress,
+                _ => new PinnedTestBundle(600, "1.0.0", loadOrder, new[] { (601UL, "2.0.0") })),
+            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+                dependencyAddress,
+                _ => new PinnedTestBundle(601, "2.0.0", loadOrder))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.repository-backed",
+            new[] { new MicroBundleManifestEntry(600, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        await session.PrepareAsync(CancellationToken.None);
+        var assembly = session.Compose(new RuntimeManifest(
+            9001,
+            new[] { new MicroBundleManifestEntry(600, "1.0.0") }));
+
+        Assert(assembly.TryGetBundle(600, out _), "the requested root should be present after verified preparation");
+        Assert(assembly.TryGetBundle(601, out _), "the exact pinned transitive dependency should be present");
+        Assert(loadOrder.SequenceEqual(new[] { 601UL, 600UL }),
+            "repository-backed composition should load the dependency before the root");
+    }
+
+    private static async Task RepositorySessionDoesNotPublishPartialClosure()
+    {
+        var rootBytes = System.Text.Encoding.UTF8.GetBytes("root with missing dependency");
+        var rootAddress = CreateAddress(610, "1.0.0", rootBytes);
+        var rootArtifact = new MicroBundleArtifact(rootAddress, rootBytes);
+        var repository = new TestArtifactRepository(rootArtifact);
+        var materializers = new ServerRolePrecompiledMicroBundleRegistry(new[]
+        {
+            new KeyValuePair<MicroBundleArtifactAddress, Func<MicroBundleArtifact, IMicroBundle>>(
+                rootAddress,
+                _ => new PinnedTestBundle(610, "1.0.0", new List<ulong>(), new[] { (611UL, "1.0.0") }))
+        });
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.repository-incomplete",
+            new[] { new MicroBundleManifestEntry(610, "1.0.0") });
+        await using var session = new RepositoryBackedCompositionSession(
+            definition, repository, repository, materializers);
+
+        var failed = false;
+        try
+        {
+            await session.PrepareAsync(CancellationToken.None);
+        }
+        catch (InvalidOperationException)
+        {
+            failed = true;
+        }
+
+        Assert(failed, "a missing transitive dependency must fail candidate preparation");
+        var compositionBlocked = false;
+        try
+        {
+            session.Compose(new RuntimeManifest(9002, new[] { new MicroBundleManifestEntry(610, "1.0.0") }));
+        }
+        catch (InvalidOperationException)
+        {
+            compositionBlocked = true;
+        }
+
+        Assert(compositionBlocked, "FSM_COS must not see a partially staged candidate catalog");
+    }
+
+    private static MicroBundleArtifactAddress CreateAddress(ulong bundleId, string version, byte[] bytes) =>
+        new(bundleId, version, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -286,6 +371,64 @@ internal static class Program
 
         public bool TryResolve(ulong bundleId, out IMicroBundle? bundle) =>
             _bundles.TryGetValue(bundleId, out bundle);
+    }
+
+    private sealed class TestArtifactRepository(params MicroBundleArtifact[] artifacts)
+        : IMicroBundleRepository, IMicroBundleRepositoryObserver
+    {
+        private readonly IReadOnlyDictionary<MicroBundleArtifactAddress, MicroBundleArtifact> _artifacts =
+            artifacts.ToDictionary(artifact => artifact.Address);
+
+        public ValueTask<MicroBundleArtifact?> GetAsync(
+            MicroBundleArtifactAddress address,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _artifacts.TryGetValue(address, out var artifact);
+            return ValueTask.FromResult(artifact);
+        }
+
+        public ValueTask PutAsync(MicroBundleArtifact artifact, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The contract fixture is read-only.");
+
+        public ValueTask<IReadOnlyList<MicroBundleArtifactObservation>> ListAsync(
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<MicroBundleArtifactObservation> observations = _artifacts.Values
+                .Select(artifact => new MicroBundleArtifactObservation(
+                    artifact.Address, artifact.Content.Length, null))
+                .ToArray();
+            return ValueTask.FromResult(observations);
+        }
+    }
+
+    private sealed class PinnedTestBundle : IMicroBundle
+    {
+        private readonly IList<ulong> _loadOrder;
+
+        public PinnedTestBundle(
+            ulong id,
+            string version,
+            IList<ulong> loadOrder,
+            IEnumerable<(ulong Id, string Version)>? dependencies = null)
+        {
+            _loadOrder = loadOrder;
+            var pins = (dependencies ?? Array.Empty<(ulong, string)>()).ToArray();
+            Descriptor = new MicroBundleDescriptor(
+                id,
+                version,
+                dependencies: pins.Select(pin => MicroBundleDependency.Pinned(pin.Id, pin.Version)));
+            Dependencies = pins
+                .Select(pin => MicroBundleDependencyRequest.Pinned(pin.Id, pin.Version))
+                .ToArray();
+        }
+
+        public MicroBundleDescriptor Descriptor { get; }
+        public IReadOnlyList<MicroBundleDependencyRequest> Dependencies { get; }
+        public void Load(IMicroBundleLoadContext context) => _loadOrder.Add(Id);
+        public ulong Id => Descriptor.Id;
+        public bool Arbitrate(IMicroBundleArbitrationContext context, int roundIndex) => false;
     }
 
     private sealed class TestBundle : IMicroBundle
