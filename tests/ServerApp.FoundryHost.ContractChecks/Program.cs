@@ -268,7 +268,7 @@ internal static class Program
                 version,
                 dependencies: ids.Select(dependencyId => new MicroBundleDependency(dependencyId)));
             Dependencies = ids
-                .Select(dependencyId => MicroBundleDependencyRequest.Unconfigured(dependencyId, "1.0.0"))
+                .Select(dependencyId => new MicroBundleDependencyRequest(dependencyId, ReadOnlyMemory<byte>.Empty))
                 .ToArray();
         }
 
