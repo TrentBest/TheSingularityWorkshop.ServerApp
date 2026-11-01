@@ -3,7 +3,7 @@
 
 # ServerApp Documentation
 
-- [README](README.md) — project orientation and current maturity.
+- [Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) — static evidence and architecture surface; not a live fleet dashboard.\n- [README](README.md) — project orientation and current maturity.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server-role taxonomy, manifest-driven provisioning, and proof sequence.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — product vision captured 2026-11-01, including landing experiences, service roles, authentication flow, elastic Experience compute, and Renderer.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first versioned manifest shape, adapter boundary, and local provisioning proof.
