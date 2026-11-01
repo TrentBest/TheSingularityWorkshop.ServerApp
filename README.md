@@ -38,7 +38,11 @@ A landing Experience must expose interactable transfer points for Social, Settin
 
 See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) for the full model.
 
-## 🟢 04 — Fleet Observatory\n\nThe static [ServerApp Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) presents the manifest contract, provisioning lifecycle, and verified evidence. It is a documentation surface—not a live fleet dashboard.\n\n## 🟢 05 — See it in a minute
+## 🟢 04 — Fleet Observatory
+
+The static [ServerApp Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) presents the manifest contract, provisioning lifecycle, and verified evidence. It is a documentation surface—not a live fleet dashboard.
+
+## 🟢 05 — See it in a minute
 
 The first local provisioning slice is now source-added. With the .NET 8 SDK, run:
 
