@@ -38,7 +38,7 @@ A landing Experience must expose interactable transfer points for Social, Settin
 
 See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) for the full model.
 
-## 🟢 04 — See it in a minute
+## 🟢 04 — Fleet Observatory\n\nThe static [ServerApp Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) presents the manifest contract, provisioning lifecycle, and verified evidence. It is a documentation surface—not a live fleet dashboard.\n\n## 🟢 05 — See it in a minute
 
 The first local provisioning slice is now source-added. With the .NET 8 SDK, run:
 
@@ -49,7 +49,7 @@ dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csp
 
 The sample uses an in-process diagnostic adapter; it opens no network port and does not prove distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) for the contract and limitations.
 
-## 🟪 05 — Documentation and next steps
+## 🟪 06 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
