@@ -133,7 +133,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41355326065](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41355326065) passed with zero build errors, including the local filesystem adapter and persisted-artifact contract check. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
