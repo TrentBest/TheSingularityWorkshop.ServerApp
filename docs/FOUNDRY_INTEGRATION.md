@@ -3,7 +3,7 @@
 
 # FSM_Foundry Integration Boundary
 
-**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
+**Status: source-pinned FSM_Foundry → FSM_COS → repository-backed artifact preparation → role-adapter workflow implemented; latest CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed.** ServerApp submits a three-step provisioning workflow to FSM_Foundry's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, prepares the candidate's exact immutable MicroBundle dependency closure from MicroBundleRepository, composes only after preparation succeeds, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures cover dependency-first composition, concurrent candidate isolation, verified artifact preparation, atomic catalog staging, and readiness gating. A concrete persistent/network storage adapter, production server role process, and distributed host remain incomplete.
 
 ## 1. The three jobs are different
 
@@ -95,7 +95,7 @@ The role definition catalog is host-owned and maps exact `RoleId` values to immu
 
 The Foundry workflow context contains only a GUID correlation value. Live `RuntimeAssembly` references remain in a private host operation dictionary because Foundry context is explicitly bounded JSON data, not an object transport or runtime container.
 
-Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, a not-ready adapter fails the workflow, two concurrent candidates can resolve different versions of the same BundleId from isolated catalogs, exact artifact retrieval and transitive version pins prepare successfully, and a missing transitive artifact prevents partial catalog publication or composition. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
+Contract checks use the actual Foundry coordinator and FSM_COS implementation with in-memory fixtures. They prove that a dependency loads before its requested root, the composed assembly reaches the role adapter, missing bundle composition prevents activation, a not-ready adapter fails the workflow, two concurrent candidates can resolve different versions of the same BundleId from isolated catalogs, a second simultaneous preparation on one candidate is rejected without republishing its catalog, exact artifact retrieval and transitive version pins prepare successfully, and a missing transitive artifact prevents partial catalog publication or composition. The older simple `FoundryProvisioningHost` remains a Core-only adapter fixture path; `FoundryComposedProvisioningHost` is the integration path that exercises the full composition handoff.
 
 Foundry workflow success means every registered step completed. ServerApp's `Ready` state is written only after the role adapter confirms readiness. FSM_COS registry selection is metadata, not execution. Neither a successful composition nor a successful workflow proves a production listener, health endpoint, or distributed host.
 
@@ -133,7 +133,7 @@ dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configurat
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
+A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. Latest CI run [#41351252144](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41351252144) passed with zero build errors. Documentation warnings originate in the pinned upstream source projects; both ServerApp contract executables passed. No package publication is authorized.
 
 ## 6. Non-goals of the first proof
 
@@ -153,7 +153,7 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Candidate-scoped session abstraction gives every provisioning operation its own FSM_COS composer/catalog boundary and runtime registry; successful sessions remain retained with their runtime.
 - [x] Repository-backed candidate preparation resolves exact immutable artifact addresses, retrieves and SHA-256 verifies each artifact, enforces exact-version transitive dependencies, and atomically publishes a private catalog only after full preparation.
 - [x] Executable materialization is restricted to host-registered precompiled factories keyed by the complete artifact address; factories receive no artifact bytes, and downloaded bytes are never loaded as assemblies or scripts.
-- [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination.
+- [x] Concurrent candidate fixture covers different versions of the same BundleId without cross-candidate catalog contamination; same-session concurrent preparation is rejected and catalog publication is serialized against disposal.
 - [x] CI run [#41341712499](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41341712499) passed with six exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the FSM_Foundry/FSM_COS/repository host contract-check executable passed.
 - [ ] Integrate a concrete persistent/network MicroBundleRepository adapter with authentication, authorization, provenance policy, and operational observability.
