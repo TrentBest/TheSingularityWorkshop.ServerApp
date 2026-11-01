@@ -1,0 +1,27 @@
+name: ServerApp CI
+
+on:
+  push:
+    branches: [development, master]
+  pull_request:
+    branches: [development, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-contract-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build core and CLI
+        run: |
+          dotnet build src/ServerApp.Cli/ServerApp.Cli.csproj --configuration Release
+      - name: Run contract checks
+        run: |
+          dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
