@@ -29,7 +29,7 @@
 
 1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
 2. Follow the five-repository pinned source checkout instructions in [Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
-3. Verify the latest exact ServerApp CI run; fix compiler/test failures before expanding the integration.
+3. Keep the passing pinned-source CI path intact; any integration change must retain exact-SHA build and contract-check evidence.
 4. Replace the in-memory MicroBundle catalog with a trusted repository-backed artifact resolver that separately proves retrieval, hash verification, and materialization.
 5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
 6. Add readiness/health contracts and idempotent instance reconciliation.
