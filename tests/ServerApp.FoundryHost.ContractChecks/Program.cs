@@ -17,6 +17,7 @@ internal static class Program
         await AcceptedWorkflowCanBeCancelled();
         await RunningWorkflowCanBeCancelled();
         await ComposedRoleUsesFoundryAndFsmCos();
+        await ComposedRoleCanDrainStopAndRetryCleanup();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         await ConcurrentCandidatesHaveIsolatedCatalogs();
@@ -127,6 +128,57 @@ internal static class Program
             "FSM_COS should load the dependency before the requested root");
         Assert(host.GetRuntimeAssembly(submission.RunId)?.RuntimeId == adapter.ReceivedAssembly.RuntimeId,
             "the host should retain the composed assembly for the successfully activated role");
+    }
+
+    private static async Task ComposedRoleCanDrainStopAndRetryCleanup()
+    {
+        var bundle = new TestBundle(150, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.lifecycle",
+            new[] { new MicroBundleManifestEntry(150, "1.0.0") });
+        var sessions = new TrackingCompositionSessionFactory(_ => new TestBundleCatalog(bundle));
+        var composer = new ServerRoleRuntimeComposer(sessions, new TestRoleCompositionCatalog(definition));
+        var adapter = new LifecycleRoleAdapter("contract.lifecycle") { FailFirstStop = true };
+        await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter });
+
+        var submission = host.Submit(CreateManifest("instance-lifecycle", "contract.lifecycle"));
+        var result = await host.StartAsync(submission.RunId);
+        Assert(result.Status == WorkflowStatus.Succeeded, "lifecycle-capable role should activate successfully");
+        Assert(host.GetLifecycleController(submission.RunId) is not null,
+            "successful activation should expose its host-owned lifecycle handle");
+
+        await host.DrainRoleAsync(submission.RunId);
+        Assert(host.GetLifecycleController(submission.RunId)!.State == ServerRoleLifecycleState.Drained,
+            "explicit drain should transition the retained role to Drained");
+
+        var firstStopFailed = false;
+        try
+        {
+            await host.StopRoleAsync(submission.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            firstStopFailed = true;
+        }
+
+        Assert(firstStopFailed, "a rejected stop should surface as a retryable failure");
+        Assert(host.GetLifecycleController(submission.RunId)!.State == ServerRoleLifecycleState.Drained,
+            "failed stop should preserve the Drained state and live composition session");
+        Assert(sessions.LastState!.ForgetCount == 0 && sessions.LastState.DisposeCount == 0,
+            "failed stop must not clean up the candidate registry or session");
+
+        await host.StopRoleAsync(submission.RunId);
+        await host.StopRoleAsync(submission.RunId);
+
+        var lifecycle = host.GetLifecycleController(submission.RunId)!;
+        Assert(lifecycle.State == ServerRoleLifecycleState.Stopped,
+            "successful stop should complete the lifecycle transition");
+        Assert(adapter.DrainCount == 1 && adapter.StopCount == 2,
+            "explicit drain should not be repeated when stop is retried");
+        Assert(sessions.LastState!.ForgetCount == 1 && sessions.LastState.DisposeCount == 1,
+            "confirmed stop should forget the runtime and dispose the session exactly once");
+        Assert(host.GetRuntimeAssembly(submission.RunId) is null,
+            "the host should release its assembly reference after confirmed stop");
     }
 
     private static async Task CompositionFailurePreventsRoleActivation()
@@ -794,6 +846,81 @@ internal static class Program
 
         public void Load(IMicroBundleLoadContext context) => _loadOrder.Add(Id);
         public bool Arbitrate(IMicroBundleArbitrationContext context, int roundIndex) => false;
+    }
+
+    private sealed class TrackingCompositionSessionFactory(
+        Func<ServerRoleCompositionDefinition, IMicroBundleCatalog> catalogFactory)
+        : IServerRoleCompositionSessionFactory
+    {
+        private readonly FsmCosCompositionSessionFactory _inner = new(catalogFactory);
+        public TrackingCompositionSessionState? LastState { get; private set; }
+
+        public IServerRoleCompositionSession Create(ServerRoleCompositionDefinition definition)
+        {
+            LastState = new TrackingCompositionSessionState();
+            return new TrackingCompositionSession(_inner.Create(definition), LastState);
+        }
+    }
+
+    private sealed class TrackingCompositionSessionState
+    {
+        public int ForgetCount { get; set; }
+        public int DisposeCount { get; set; }
+    }
+
+    private sealed class TrackingCompositionSession(
+        IServerRoleCompositionSession inner,
+        TrackingCompositionSessionState state) : IServerRoleCompositionSession
+    {
+        public ValueTask PrepareAsync(CancellationToken cancellationToken) =>
+            inner.PrepareAsync(cancellationToken);
+        public RuntimeAssembly Compose(RuntimeManifest manifest) => inner.Compose(manifest);
+        public bool TrySelect(ulong runtimeId) => inner.TrySelect(runtimeId);
+        public bool Forget(ulong runtimeId)
+        {
+            state.ForgetCount++;
+            return inner.Forget(runtimeId);
+        }
+        public bool TryGet(ulong runtimeId, out RuntimeAssembly? assembly) =>
+            inner.TryGet(runtimeId, out assembly);
+        public async ValueTask DisposeAsync()
+        {
+            state.DisposeCount++;
+            await inner.DisposeAsync();
+        }
+    }
+
+    private sealed class LifecycleRoleAdapter(string roleId) : IServerRoleLifecycleAdapter
+    {
+        public string RoleId { get; } = roleId;
+        public int DrainCount { get; private set; }
+        public int StopCount { get; private set; }
+        public bool FailFirstStop { get; set; }
+
+        public ValueTask<RoleStartResult> StartAsync(
+            ServerRoleManifest manifest, RuntimeAssembly assembly, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new RoleStartResult(true, "Lifecycle fixture is ready."));
+        }
+
+        public ValueTask<RoleLifecycleResult> DrainAsync(
+            ServerRoleManifest manifest, RuntimeAssembly assembly, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DrainCount++;
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture drained."));
+        }
+
+        public ValueTask<RoleLifecycleResult> StopAsync(
+            ServerRoleManifest manifest, RuntimeAssembly assembly, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StopCount++;
+            if (FailFirstStop && StopCount == 1)
+                return ValueTask.FromResult(new RoleLifecycleResult(false, "Transient stop failure."));
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture stopped."));
+        }
     }
 
     private sealed class RecordingRuntimeAdapter(string roleId, bool isReady) : IServerRoleRuntimeAdapter
