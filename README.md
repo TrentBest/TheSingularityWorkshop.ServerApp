@@ -65,6 +65,8 @@ git clone https://github.com/TrentBest/FSM_UserIO.git _deps/FSM_UserIO
 git -C _deps/FSM_UserIO checkout db5b59d0521a341f97e6077e3508eb2bd7171607
 git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain.git _deps/TheSingularityWorkshop.MicroBundleDomain
 git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591aec2337ad4470bfadb20fb11e
+git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository.git _deps/MicroBundleRepository
+git -C _deps/MicroBundleRepository checkout 2b23967262766a0466b263e0838afbf8affd234b
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
