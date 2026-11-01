@@ -17,6 +17,7 @@ public interface IServerRoleCompositionSessionFactory
 /// </summary>
 public interface IServerRoleCompositionSession : IAsyncDisposable
 {
+    ValueTask PrepareAsync(CancellationToken cancellationToken);
     RuntimeAssembly Compose(RuntimeManifest manifest);
     bool TrySelect(ulong runtimeId);
     bool Forget(ulong runtimeId);
@@ -48,6 +49,12 @@ public sealed class FsmCosCompositionSession(IFsmCos composer) : IServerRoleComp
 {
     private readonly RuntimeExperienceHost _host =
         new(composer ?? throw new ArgumentNullException(nameof(composer)));
+
+    public ValueTask PrepareAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.CompletedTask;
+    }
 
     public RuntimeAssembly Compose(RuntimeManifest manifest) => _host.ComposeAndRegister(manifest);
     public bool TrySelect(ulong runtimeId) => _host.TryActivate(runtimeId);
