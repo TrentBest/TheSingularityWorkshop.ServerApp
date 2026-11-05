@@ -1,0 +1,18 @@
+{
+  "repository": "TrentBest/TheSingularityWorkshop.ServerApp",
+  "policy": "exactly-master-and-development",
+  "required_branches": [
+    "development",
+    "master"
+  ],
+  "actual_branches": [
+    "development",
+    "master",
+    "work/candidate-scoped-composition-sessions"
+  ],
+  "branch_count": 3,
+  "status": "NON-COMPLIANT",
+  "evaluated_at": "2026-11-05T04:27:18Z",
+  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41967894784",
+  "triggering_commit": "e256e77bcb3cc5d0cc9e184a1eebe7a08ad599a3"
+}
