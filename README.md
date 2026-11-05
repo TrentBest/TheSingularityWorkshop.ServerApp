@@ -3,6 +3,7 @@
 
 # ✳️ 00 ServerApp
 
+[![Sith Policy](assets/sith-policy.svg)](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/workflows/sith-policy.yml)
 **ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
 This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No runnable server, public endpoint, authentication service, scheduler, persistence system, or deployment workflow is claimed here.
