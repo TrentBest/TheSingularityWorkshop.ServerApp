@@ -44,7 +44,17 @@ See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_
 
 Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/). Experiment with host counts, CPU and memory budgets, workload profiles, and first-fit placement. The browser simulation is illustrative; the linked source and CI runs provide the implementation evidence. It does not connect to or provision real hosts.
 
-## 🟢 05 — See it in a minute
+## 🟢 05 — Inspect a deployment machine
+
+The dependency-free `ServerApp.MachineReport` utility gathers OS/build architecture, CPU, physical memory, graphics adapter, installed .NET SDKs/runtimes, storage capacity, and active network interfaces. It copies the report to the clipboard when a supported clipboard utility is available. Review the output before sharing: it includes the computer name and private LAN IPv4 addresses, but does not collect usernames, credentials, serial numbers, MAC addresses, file listings, or public-IP lookups.
+
+```bash
+dotnet run --project src/ServerApp.MachineReport/ServerApp.MachineReport.csproj --configuration Release
+```
+
+Run this on the intended ServerApp host machine, then paste the copied report into the conversation. The utility only reads system information; it does not install software or change machine settings.
+
+## 🟢 06 — See it in a minute
 
 The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 8 SDK, run the diagnostic Core checks:
 
@@ -71,7 +81,7 @@ dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.Foundr
 
 The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
-## 🟪 06 — Documentation and next steps
+## 🟪 07 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
