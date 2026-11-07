@@ -153,6 +153,38 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
     public RuntimeAssembly? GetRuntimeAssembly(Guid runId) =>
         TryGetOperation(runId, out var state) ? state.Assembly : null;
 
+    /// <summary>
+    /// Returns the host-owned lifecycle handle for a successfully activated role when its
+    /// registered adapter implements graceful drain and stop.
+    /// </summary>
+    public ServerRoleLifecycleController? GetLifecycleController(Guid runId) =>
+        TryGetOperation(runId, out var state) ? state.Lifecycle : null;
+
+    /// <summary>Drains the activated role associated with a completed provisioning run.</summary>
+    public ValueTask DrainRoleAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        var lifecycle = GetLifecycleController(runId)
+            ?? throw new InvalidOperationException("The run has no activated role with lifecycle support.");
+        return lifecycle.DrainAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Stops the activated role associated with a completed provisioning run. Runtime registry
+    /// and composition-session cleanup occurs only after the adapter confirms role stop.
+    /// </summary>
+    public async ValueTask StopRoleAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetOperation(runId, out var state) || state.Lifecycle is null)
+            throw new InvalidOperationException("The run has no activated role with lifecycle support.");
+
+        await state.Lifecycle.StopAsync(cancellationToken).ConfigureAwait(false);
+        if (state.Lifecycle.State == ServerRoleLifecycleState.Stopped)
+        {
+            state.Session = null;
+            state.Assembly = null;
+        }
+    }
+
     private ValueTask ValidateAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -184,7 +216,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         }
     }
 
-    private ValueTask ComposeAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
+    private async ValueTask ComposeAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = GetOperation(context);
@@ -193,19 +225,33 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
 
         try
         {
-            state.Assembly = _composer.Compose(definition);
+            state.Session = _composer.CreateSession(definition);
+            await state.Session.PrepareAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.CompletedTask;
+            state.Assembly = _composer.Compose(state.Session, definition);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             if (state.Assembly is not null)
-                _composer.Forget(state.Assembly.RuntimeId);
+                state.Session?.Forget(state.Assembly.RuntimeId);
+            if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+            state.Assembly = null;
             throw;
         }
         catch (Exception exception)
         {
             state.Result = Failed(state.Manifest, $"FSM_COS composition failed: {exception.GetType().Name}: {exception.Message}");
+            if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+            state.Assembly = null;
             throw;
         }
     }
@@ -219,8 +265,10 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!_composer.TrySelect(assembly.RuntimeId))
-                throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by the host registry.");
+            var session = state.Session
+                ?? throw new InvalidOperationException("The candidate composition session is no longer available.");
+            if (!session.TrySelect(assembly.RuntimeId))
+                throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by its candidate registry.");
 
             var adapter = _adapters[state.Manifest.RoleId];
             var start = await adapter.StartAsync(state.Manifest, assembly, cancellationToken).ConfigureAwait(false);
@@ -233,17 +281,26 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
                 ServerInstanceState.Ready,
                 start.Detail,
                 Array.Empty<ManifestValidationError>());
+            if (adapter is IServerRoleLifecycleAdapter lifecycleAdapter)
+                state.Lifecycle = new ServerRoleLifecycleController(
+                    state.Manifest, assembly, lifecycleAdapter, session);
         }
         catch (OperationCanceledException)
         {
-            _composer.Forget(assembly.RuntimeId);
+            state.Session?.Forget(assembly.RuntimeId);
+            if (state.Session is not null)
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+            state.Session = null;
             state.Assembly = null;
             state.Result = Cancelled(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
             throw;
         }
         catch (Exception exception)
         {
-            _composer.Forget(assembly.RuntimeId);
+            state.Session?.Forget(assembly.RuntimeId);
+            if (state.Session is not null)
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+            state.Session = null;
             state.Assembly = null;
             state.Result = Failed(state.Manifest, $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
             throw;
@@ -283,13 +340,33 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         new(manifest.InstanceId, manifest.RoleId, ServerInstanceState.Cancelled,
             detail, Array.Empty<ManifestValidationError>());
 
-    public ValueTask DisposeAsync() => _workflows.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _workflows.DisposeAsync().ConfigureAwait(false);
+        foreach (var state in _operations.Values)
+        {
+            if (state.Lifecycle is not null &&
+                state.Lifecycle.State != ServerRoleLifecycleState.Stopped)
+            {
+                await state.Lifecycle.StopAsync().ConfigureAwait(false);
+                state.Session = null;
+                state.Assembly = null;
+            }
+            else if (state.Session is not null)
+            {
+                await state.Session.DisposeAsync().ConfigureAwait(false);
+                state.Session = null;
+            }
+        }
+    }
 
     private sealed class OperationState(ServerRoleManifest manifest)
     {
         public ServerRoleManifest Manifest { get; } = manifest;
         public ServerRoleCompositionDefinition? Definition { get; set; }
+        public IServerRoleCompositionSession? Session { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
+        public ServerRoleLifecycleController? Lifecycle { get; set; }
         public ProvisioningResult? Result { get; set; }
     }
 }

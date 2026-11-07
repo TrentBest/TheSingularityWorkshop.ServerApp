@@ -15,12 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Checkout Foundry workflow source (pinned)
+      - name: Checkout FSM_Foundry workflow source (pinned)
         uses: actions/checkout@v4
         with:
-          repository: TrentBest/TheSingularityWorkshop.Foundry
+          repository: TrentBest/TheSingularityWorkshop.FSM_Foundry
           ref: 8bd3487a96af2cd7d667f62c4566a499bafe30dc
-          path: _deps/Foundry
+          path: _deps/FSM_Foundry
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
         with:
@@ -45,6 +45,12 @@ jobs:
           repository: TrentBest/TheSingularityWorkshop.MicroBundleDomain
           ref: d8c1f52d3550591aec2337ad4470bfadb20fb11e
           path: _deps/TheSingularityWorkshop.MicroBundleDomain
+      - name: Checkout MicroBundleRepository Core source (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: TrentBest/TheSingularityWorkshop.MicroBundleRepository
+          ref: 2b23967262766a0466b263e0838afbf8affd234b
+          path: _deps/MicroBundleRepository
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:

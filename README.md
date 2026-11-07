@@ -6,7 +6,7 @@
 [![Sith Policy](assets/sith-policy.svg)](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/workflows/sith-policy.yml)
 **ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
-This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No runnable server, public endpoint, authentication service, scheduler, persistence system, or deployment workflow is claimed here.
+This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No production server, public endpoint, authentication service, scheduler, durable role-state system, or deployment workflow is claimed here. The Foundry host integration now includes candidate-scoped MicroBundle artifact preparation and an explicitly rooted local filesystem repository adapter for development; this is not production storage or a deployed server.
 
 This document follows the Workshop's [Documentation Standard](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/master/DOCUMENTATION_STANDARD.md). See [Agent Onboarding](AGENTS.md) before contributing.
 
@@ -68,18 +68,18 @@ Run this on the intended ServerApp host machine, then paste the copied report in
 
 ## 🟢 06 — See it in a minute
 
-The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 8 SDK, run the diagnostic Core checks:
+The local manifest-to-ready proof, FSM_Foundry/FSM_COS workflow, candidate-isolated composition sessions, and repository-backed artifact preparation boundary are source-implemented. The latter resolves exact immutable artifacts, verifies SHA-256, enforces pinned transitive dependencies, and invokes only host-registered precompiled materializers; it does not dynamically load artifact bytes. With the .NET 8 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-To build and run the composed Foundry/FSM_COS integration checks, first place the five source repositories at the exact revisions used by CI:
+To build and run the composed FSM_Foundry/FSM_COS integration checks, first place the six source repositories at the exact revisions used by CI:
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Foundry.git _deps/FSM_Foundry
+git -C _deps/FSM_Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -88,21 +88,23 @@ git clone https://github.com/TrentBest/FSM_UserIO.git _deps/FSM_UserIO
 git -C _deps/FSM_UserIO checkout db5b59d0521a341f97e6077e3508eb2bd7171607
 git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain.git _deps/TheSingularityWorkshop.MicroBundleDomain
 git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591aec2337ad4470bfadb20fb11e
+git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleRepository.git _deps/MicroBundleRepository
+git -C _deps/MicroBundleRepository checkout 2b23967262766a0466b263e0838afbf8affd234b
 dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition, Foundry workflow execution, and the host-owned drain/stop/cleanup lifecycle contract. They open no network port and do not prove a concrete persistent/network repository deployment, production role process supervision, or distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [FSM_Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 07 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
-- [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
+- [FSM_Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
-The first milestone is a validated role manifest and one deterministic local provisioning path. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment should be separate milestones with independently verified contracts.
+The next milestones are a concrete persistent/network MicroBundleRepository adapter with operational authorization and provenance policy, followed by a real server-role process adapter that supplies operational evidence to the now-implemented host drain/stop/cleanup contract. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment remain separate milestones with independently verified contracts.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->

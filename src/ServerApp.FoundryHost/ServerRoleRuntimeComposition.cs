@@ -67,24 +67,23 @@ public sealed class SequentialRuntimeIdentityProvider : IRuntimeIdentityProvider
 }
 
 /// <summary>
-/// Composes approved role roots through FSM_COS and retains/selects the result through
-/// FSM_COS's host-side RuntimeExperienceHost registry. Selection is metadata, not execution.
+/// Resolves approved role roots and creates a fresh composition session for every candidate.
+/// A session, not this shared coordinator, owns the candidate's FSM_COS catalog and registry.
 /// </summary>
 public sealed class ServerRoleRuntimeComposer
 {
-    private readonly RuntimeExperienceHost _experienceHost;
     private readonly IServerRoleCompositionCatalog _definitions;
+    private readonly IServerRoleCompositionSessionFactory _sessions;
     private readonly IRuntimeIdentityProvider _runtimeIds;
 
     public ServerRoleRuntimeComposer(
-        IFsmCos composer,
+        IServerRoleCompositionSessionFactory sessions,
         IServerRoleCompositionCatalog definitions,
         IRuntimeIdentityProvider? runtimeIds = null)
     {
-        ArgumentNullException.ThrowIfNull(composer);
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
         _runtimeIds = runtimeIds ?? new SequentialRuntimeIdentityProvider();
-        _experienceHost = new RuntimeExperienceHost(composer);
     }
 
     public ServerRoleCompositionDefinition ValidateAndResolve(ServerRoleManifest manifest)
@@ -104,24 +103,25 @@ public sealed class ServerRoleRuntimeComposer
         return definition;
     }
 
-    public RuntimeAssembly Compose(ServerRoleCompositionDefinition definition)
+    public IServerRoleCompositionSession CreateSession(ServerRoleCompositionDefinition definition)
     {
+        ArgumentNullException.ThrowIfNull(definition);
+        return _sessions.Create(definition)
+            ?? throw new InvalidOperationException("The composition session factory returned null.");
+    }
+
+    public RuntimeAssembly Compose(
+        IServerRoleCompositionSession session,
+        ServerRoleCompositionDefinition definition)
+    {
+        ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(definition);
         var manifest = new RuntimeManifest(
             RuntimeId: _runtimeIds.NextRuntimeId(),
             Bundles: definition.RootBundles);
 
-        return _experienceHost.ComposeAndRegister(manifest);
+        return session.Compose(manifest);
     }
-
-    /// <summary>Selects the composed runtime in FSM_COS host metadata; this does not start it.</summary>
-    public bool TrySelect(ulong runtimeId) => _experienceHost.TryActivate(runtimeId);
-
-    /// <summary>Forgets a failed composition/activation result; it does not unload bundle side effects.</summary>
-    public bool Forget(ulong runtimeId) => _experienceHost.Registry.TryRemove(runtimeId);
-
-    public bool TryGet(ulong runtimeId, out RuntimeAssembly? assembly) =>
-        _experienceHost.Registry.TryGet(runtimeId, out assembly);
 }
 
 /// <summary>

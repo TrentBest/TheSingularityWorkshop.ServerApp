@@ -6,8 +6,8 @@
 ## Current checkpoint — 2026-11-01
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
-- Active branch: `development`; `master` remains the starting baseline.
-- Current stage: local manifest/placement proofs and a source-pinned Foundry → FSM_COS → role-adapter workflow are source-implemented. The composed workflow has deterministic in-memory contract fixtures; trusted repository artifact delivery and a production server role host remain incomplete.
+- Active work branch: `work/candidate-scoped-composition-sessions` (draft PR #3 targeting `development`); `master` remains the starting baseline.
+- Current stage: local manifest/placement proofs and a source-pinned FSM_Foundry → FSM_COS → role-adapter workflow are source-implemented. Candidate-scoped composition sessions now isolate each provisioning operation's FSM_COS composer/catalog boundary and runtime registry. Repository-backed exact-address retrieval, SHA-256 verification, pinned dependency-closure preparation, atomic private-catalog staging, and host-allowlisted precompiled materialization are implemented against MicroBundleRepository Core contracts. An explicitly rooted local filesystem artifact adapter is implemented for development hosts; production remote storage/authentication/provenance and a production server role host remain incomplete.
 - Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
 - Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
 - Performance hypotheses: rapid manifest-to-ready activation and an early 30% computational/energy savings estimate are goals/hypotheses, not verified claims.
@@ -20,18 +20,25 @@
 - `examples/diagnostic-ready.serverapp.json`: sample manifest.
 - `tests/ServerApp.ContractChecks`: dependency-free Core contract checks.
 - `src/ServerApp.FoundryHost/FoundryProvisioningHost.cs`: Core-only Foundry workflow fixture; `FoundryComposedProvisioningHost.cs` runs validate → FSM_COS compose → role activation through the actual Foundry coordinator.
-- `src/ServerApp.FoundryHost/ServerRoleRuntimeComposition.cs`: host-owned role-to-approved-root catalog, process-local runtime IDs, FSM_COS `RuntimeExperienceHost` composition handoff, and `IServerRoleRuntimeAdapter` contract.
-- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
-- `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, and MicroBundleDomain at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: the first full-source CI run found a MicroBundleDomain sibling-directory naming mismatch. CI checkout path has been corrected; the latest exact workflow run still needs confirmation.
+- `src/ServerApp.FoundryHost/ServerRoleRuntimeComposition.cs`: host-owned role-to-approved-root catalog, process-local runtime IDs, session creation, and `IServerRoleRuntimeAdapter` contract.
+- `src/ServerApp.FoundryHost/ServerRoleCompositionSessions.cs`: per-candidate FSM_COS composer/catalog boundary and runtime registry; successful sessions are retained with the live runtime.
+- `src/ServerApp.FoundryHost/ServerRoleLifecycle.cs`: adapter capability and serialized lifecycle controller; successful stop gates registry removal and composition-session disposal, with cleanup retry that does not repeat a confirmed role stop.
+- `FoundryComposedProvisioningHost`: exposes lifecycle handles plus `DrainRoleAsync` and `StopRoleAsync` for adapters implementing `IServerRoleLifecycleAdapter.
+- `src/ServerApp.FoundryHost/RepositoryBackedCompositionSession.cs`: exact inventory resolution, immutable artifact retrieval, SHA-256 verification, exact-version transitive dependency closure, atomic catalog publication, and host-registered precompiled materializer allowlist.
+- `src/ServerApp.FoundryHost/LocalFileSystemCompositionSessionFactory.cs`: development-only adapter wiring one explicitly rooted `FileSystemMicroBundleRepository` as both artifact retriever and inventory observer; no write endpoint or production trust policy is exposed.
+- MicroBundleRepository Core source pinned in CI at `2b23967262766a0466b263e0838afbf8affd234b`.
+- [Draft PR #3](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/3): candidate-session implementation; CI run [#41362237960](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41362237960) passed, including concurrent same-BundleId/different-version isolation repository-backed pinned-closure/atomic-staging fixtures, persisted filesystem retrieval, wrong-address rejection, invalid materializer rejection, and unpinned dependency rejection.
+- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry workflow lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, role readiness gating, role drain, transient stop failure/retry, idempotent stop, cancelled drain, concurrent drain/stop serialization, and exactly-once cleanup.
+- `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, MicroBundleDomain, and MicroBundleRepository Core at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
+- Verification status: latest PR CI run #41362237960 passed all pinned-source checkouts, Core/CLI and Foundry host builds, and both contract-check executables, including role lifecycle drain/stop/retry/cleanup coverage.
 
 ## Resume sequence
 
 1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
-2. Follow the five-repository pinned source checkout instructions in [Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
+2. Follow the six-repository pinned source checkout instructions in [FSM_Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
 3. Keep the passing pinned-source CI path intact; any integration change must retain exact-SHA build and contract-check evidence.
-4. Replace the in-memory MicroBundle catalog with a trusted repository-backed artifact resolver that separately proves retrieval, hash verification, and materialization.
-5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
+4. Use the local filesystem adapter for deterministic development persistence, then select a production storage adapter and define operational authentication, authorization, provenance, and observability. The host-side resolver and precompiled materializer boundary remain separate from executable loading; no REST listener or production repository deployment is implied.
+5. Implement the first real server-role process adapter and connect its operational drain/stop evidence to the now-tested host lifecycle contract; do not assume FSM_COS unloads bundles.
 6. Add readiness/health contracts and idempotent instance reconciliation.
 7. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
 8. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
