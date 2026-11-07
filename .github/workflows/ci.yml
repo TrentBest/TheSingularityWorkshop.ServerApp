@@ -52,6 +52,9 @@ jobs:
       - name: Build core and CLI
         run: |
           dotnet build src/ServerApp.Cli/ServerApp.Cli.csproj --configuration Release
+      - name: Build machine report utility
+        run: |
+          dotnet build src/ServerApp.MachineReport/ServerApp.MachineReport.csproj --configuration Release
       - name: Build Foundry host integration
         run: |
           dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
