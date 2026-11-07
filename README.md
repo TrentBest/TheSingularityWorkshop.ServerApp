@@ -44,6 +44,18 @@ See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_
 
 Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/). Experiment with host counts, CPU and memory budgets, workload profiles, and first-fit placement. The browser simulation is illustrative; the linked source and CI runs provide the implementation evidence. It does not connect to or provision real hosts.
 
+## 🟦 Open the repository in Visual Studio
+
+Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. This solution includes the standalone Core, CLI, MachineReport, and Core ContractChecks projects, so it opens as a normal Visual Studio solution without requiring the neighboring Workshop repositories first.
+
+The Foundry host integration and its contract checks remain source-integrated projects that require the pinned repositories under `_deps`; CI checks those separately. They are intentionally not part of this standalone solution yet, so a fresh clone can open and build the useful local projects immediately.
+
+You can also build the solution from a Developer PowerShell or terminal:
+
+```powershell
+dotnet build .\ServerApp.sln --configuration Release
+```
+
 ## 🟢 05 — Inspect a deployment machine
 
 The dependency-free `ServerApp.MachineReport` utility gathers OS/build architecture, CPU, physical memory, graphics adapter, installed .NET SDKs/runtimes, storage capacity, and active network interfaces. It copies the report to the clipboard when a supported clipboard utility is available. Review the output before sharing: it includes the computer name and private LAN IPv4 addresses, but does not collect usernames, credentials, serial numbers, MAC addresses, file listings, or public-IP lookups.
