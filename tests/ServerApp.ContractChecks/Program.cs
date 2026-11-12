@@ -58,7 +58,7 @@ return failures.Count == 0 ? 0 : 1;
 
 static async Task MatchAdmissionResolvesEligibleBuilds()
 {
-    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
+    var catalog = new TestBotBuildCatalog(new Dictionary<(string, string), RegisteredBotBuild>()
     {
         [("bot-a", "build-a")] = new(new("bot-a", "build-a", new string('a', 64)), BotBuildEligibilityStatus.Eligible),
         [("bot-b", "build-b")] = new(new("bot-b", "build-b", new string('b', 64)), BotBuildEligibilityStatus.Eligible)
@@ -79,7 +79,7 @@ static async Task MatchAdmissionResolvesEligibleBuilds()
 
 static async Task MatchAdmissionRejectsUnavailableAndMismatchedBuilds()
 {
-    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
+    var catalog = new TestBotBuildCatalog(new Dictionary<(string, string), RegisteredBotBuild>()
     {
         [("bot-a", "build-a")] = new(new("different-bot", "build-a", new string('a', 64)), BotBuildEligibilityStatus.Eligible)
     });
@@ -90,14 +90,14 @@ static async Task MatchAdmissionRejectsUnavailableAndMismatchedBuilds()
         new MatchAdmissionParticipant("participant-b", "bot-b", "build-b")));
 
     Assert(!result.IsAdmitted && result.Assignment is null &&
-           result.Errors.Any(x => x.Code == "admission.bot-build.identity-mismatch") &&
-           result.Errors.Any(x => x.Code == "admission.bot-build.ineligible"),
+           result.Errors.Any(x => x.Code == "admission.bot-build.first.identity-mismatch") &&
+           result.Errors.Any(x => x.Code == "admission.bot-build.not-found"),
         "Admission accepted an unavailable build or a catalog result for another identity.");
 }
 
 static async Task MatchAdmissionRejectsDuplicateIdentities()
 {
-    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>());
+    var catalog = new TestBotBuildCatalog(new Dictionary<(string, string), RegisteredBotBuild>());
     var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
     var result = await service.AdmitAsync(new MatchAdmissionRequest(
         "1v1",
