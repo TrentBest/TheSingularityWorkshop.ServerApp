@@ -68,7 +68,7 @@ dotnet build .\src\ServerApp.DataWarehouse\ServerApp.DataWarehouse.csproj --conf
 dotnet run --project .\tests\ServerApp.DataWarehouse.ContractChecks\ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
 ```
 
-The competitive ladder's bot-build registry now has a host-owned atomic snapshot/CAS contract and a DataWarehouse coordinator that builds a candidate hot catalogue, commits the next durable revision, and only then makes it visible. No concrete database or file format is selected yet; the contract checks use an in-memory failure-injection store, so this is not a claim of disk durability. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
+The competitive ladder's bot-build registry now has a host-owned atomic snapshot/CAS contract with explicit schema version 1 and a DataWarehouse coordinator that builds a candidate hot catalogue, commits the next durable revision, and only then makes it visible. Host stores must migrate supported older payloads and reject unknown versions. No concrete database or file format is selected yet; the contract checks use an in-memory failure-injection store, so this is not a claim of disk durability. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
 
 The Foundry host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
 
