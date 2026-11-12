@@ -70,6 +70,9 @@ jobs:
       - name: Run core contract checks
         run: |
           dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
+      - name: Run DataWarehouse integration contract checks
+        run: |
+          dotnet run --project tests/ServerApp.DataWarehouse.ContractChecks/ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
       - name: Run Foundry host contract checks
         run: |
           dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
