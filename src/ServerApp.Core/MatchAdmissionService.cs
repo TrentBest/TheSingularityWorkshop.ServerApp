@@ -82,8 +82,8 @@ public sealed class MatchAdmissionService
         var firstBuild = firstRegistration?.Build;
         var secondBuild = secondRegistration?.Build;
 
-        ValidateBuildRegistration(firstRegistration, request.First, "first", errors);
-        ValidateBuildRegistration(secondRegistration, request.Second, "second", errors);
+        ValidateBuildRegistration(firstRegistration, firstParticipant, "first", errors);
+        ValidateBuildRegistration(secondRegistration, secondParticipant, "second", errors);
 
         if (errors.Count > 0)
             return new(null, Array.AsReadOnly(errors.ToArray()));
