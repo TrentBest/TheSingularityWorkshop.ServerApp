@@ -1,4 +1,5 @@
 using ServerApp.Core;
+using ServerApp.DataWarehouse;
 
 var checks = new (string Name, Func<Task> Run)[]
 {
@@ -34,7 +35,10 @@ var checks = new (string Name, Func<Task> Run)[]
     ("1v1 admission rejects unavailable and mismatched builds", MatchAdmissionRejectsUnavailableAndMismatchedBuilds),
     ("1v1 admission rejects duplicate bot identities before lookup", MatchAdmissionRejectsDuplicateIdentities),
     ("1v1 admission rejects ineligible build states", MatchAdmissionRejectsIneligibleBuilds),
-    ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild)
+    ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild),
+    ("DataWarehouse catalogue stores and resolves immutable build records", DataWarehouseCatalogStoresBuilds),
+    ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
+    ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration)
 };
 
 var failures = new List<string>();
@@ -150,6 +154,58 @@ static async Task MatchAdmissionRequiresExactBuild()
     Assert(!result.IsAdmitted && result.Assignment is null &&
            result.Errors.Any(x => x.Code == "admission.bot-build.not-found"),
         "Admission silently substituted a different build for the requested build.");
+}
+
+static async Task DataWarehouseCatalogStoresBuilds()
+{
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: 4, pageSize: 64);
+    var build = new BotBuildReference("bot-a", "build-a", new string('a', 64));
+    Assert(catalog.TryRegister(build, BotBuildEligibilityStatus.Eligible, out var error),
+        $"A valid build could not be registered: {error}");
+    var registration = await catalog.FindBuildAsync("bot-a", "build-a");
+    Assert(registration is not null &&
+           registration.Build == build with { ContentSha256 = new string('A', 64) } &&
+           registration.Eligibility == BotBuildEligibilityStatus.Eligible &&
+           catalog.RegisteredBuildCount == 1,
+        "The DataWarehouse shelf did not preserve the exact build identity, SHA-256, and eligibility.");
+    var snapshot = catalog.CreateSnapshot();
+    Assert(snapshot.Count == 1 && snapshot[0].Build.BotIdentityId == "bot-a" &&
+           snapshot[0].Build.BuildId == "build-a",
+        "The durable-boundary snapshot did not reproduce the registered domain record.");
+}
+
+static async Task DataWarehouseCatalogUpdatesEligibility()
+{
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: 2, pageSize: 64);
+    var build = new BotBuildReference("bot-a", "build-a", new string('b', 64));
+    Assert(catalog.TryRegister(build, BotBuildEligibilityStatus.PendingReview, out _),
+        "The pending-review build could not be registered.");
+    Assert(catalog.TrySetEligibility("bot-a", "build-a", BotBuildEligibilityStatus.Eligible),
+        "The eligibility state could not be updated.");
+    var registration = await catalog.FindBuildAsync("bot-a", "build-a");
+    Assert(registration?.Eligibility == BotBuildEligibilityStatus.Eligible &&
+           registration.Build.ContentSha256 == new string('B', 64),
+        "Changing eligibility mutated or lost the immutable build content identity.");
+}
+
+static Task DataWarehouseCatalogRejectsInvalidRegistration()
+{
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: 1, pageSize: 64);
+    Assert(!catalog.TryRegister(new BotBuildReference("bot-a", "bad-hash", "not-a-hash"),
+        BotBuildEligibilityStatus.Eligible, out _),
+        "A malformed content hash was registered.");
+    Assert(catalog.TryRegister(new BotBuildReference("bot-a", "build-a", new string('c', 64)),
+        BotBuildEligibilityStatus.PendingReview, out _),
+        "The first valid build could not be registered.");
+    Assert(!catalog.TryRegister(new BotBuildReference("bot-a", "build-a", new string('c', 64)),
+        BotBuildEligibilityStatus.Eligible, out _),
+        "A duplicate identity/build pair was registered.");
+    Assert(!catalog.TryRegister(new BotBuildReference("bot-b", "build-b", new string('d', 64)),
+        BotBuildEligibilityStatus.Eligible, out _),
+        "The catalogue accepted a build beyond its fixed shelf capacity.");
+    Assert(catalog.RegisteredBuildCount == 1,
+        "Rejected registrations changed the live-record count.");
+    return Task.CompletedTask;
 }
 
 static Task VersionOneJsonParses()
