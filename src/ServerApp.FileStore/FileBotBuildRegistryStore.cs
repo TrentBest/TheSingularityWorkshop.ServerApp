@@ -258,17 +258,24 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
         using var stream = new MemoryStream(payload.ToArray(), writable: false);
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: false);
         var upsertCount = ReadCount(reader);
+        var changedKeys = new HashSet<(string BotIdentityId, string BuildId)>();
         for (var i = 0; i < upsertCount; i++)
         {
             var registration = ReadRegistration(reader);
-            registrations[Key(registration)] = registration;
+            var key = Key(registration);
+            if (!changedKeys.Add(key))
+                throw new InvalidDataException("A journal frame contains a duplicate bot identity/build key.");
+            registrations[key] = registration;
         }
 
         var removalCount = ReadCount(reader);
         for (var i = 0; i < removalCount; i++)
         {
             var key = (ReadString(reader), ReadString(reader));
-            registrations.Remove(key);
+            if (!changedKeys.Add(key))
+                throw new InvalidDataException("A journal frame both updates and removes the same bot identity/build key.");
+            if (!registrations.Remove(key))
+                throw new InvalidDataException("A journal frame removes a bot identity/build key that is not registered.");
         }
 
         if (stream.Position != stream.Length)
