@@ -72,11 +72,13 @@ public sealed class MatchAdmissionService
         if (errors.Count > 0)
             return new(null, Array.AsReadOnly(errors.ToArray()));
 
+        var firstParticipant = request.First!;
+        var secondParticipant = request.Second!;
         cancellationToken.ThrowIfCancellationRequested();
         var firstRegistration = await _buildCatalog.FindBuildAsync(
-            request.First.BotIdentityId, request.First.BuildId, cancellationToken).ConfigureAwait(false);
+            firstParticipant.BotIdentityId, firstParticipant.BuildId, cancellationToken).ConfigureAwait(false);
         var secondRegistration = await _buildCatalog.FindBuildAsync(
-            request.Second.BotIdentityId, request.Second.BuildId, cancellationToken).ConfigureAwait(false);
+            secondParticipant.BotIdentityId, secondParticipant.BuildId, cancellationToken).ConfigureAwait(false);
         var firstBuild = firstRegistration?.Build;
         var secondBuild = secondRegistration?.Build;
 
@@ -96,8 +98,8 @@ public sealed class MatchAdmissionService
             _gameAdapterVersion,
             DateTimeOffset.UtcNow,
             [
-                new MatchParticipantAssignment(request.First.ParticipantId, "A", firstBuild!),
-                new MatchParticipantAssignment(request.Second.ParticipantId, "B", secondBuild!)
+                new MatchParticipantAssignment(firstParticipant.ParticipantId, "A", firstBuild!),
+                new MatchParticipantAssignment(secondParticipant.ParticipantId, "B", secondBuild!)
             ]);
 
         errors.AddRange(CompetitionContractValidator.ValidateAssignment(_competition, assignment));
