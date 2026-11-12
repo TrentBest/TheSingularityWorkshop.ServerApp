@@ -56,6 +56,37 @@ public sealed class DurableBotBuildRegistry : IRegisteredBotBuildCatalog, IDispo
         get { lock (_gate) { ThrowIfDisposed(); return _revision; } }
     }
 
+    /// <summary>
+    /// Reloads the authoritative store snapshot after a revision conflict or operator-directed
+    /// refresh. The replacement catalogue is validated before it becomes visible.
+    /// </summary>
+    public async ValueTask ReloadAsync(CancellationToken cancellationToken = default)
+    {
+        await _mutation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            var snapshot = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var candidate = DataWarehouseBotBuildCatalog.RestoreSnapshot(
+                snapshot.Registrations, _capacity, _pageSize);
+
+            DataWarehouseBotBuildCatalog previous;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                previous = _catalog;
+                _catalog = candidate;
+                _revision = snapshot.Revision;
+            }
+            previous.Dispose();
+        }
+        finally
+        {
+            _mutation.Release();
+        }
+    }
+
     public ValueTask<RegisteredBotBuild?> FindBuildAsync(
         string botIdentityId,
         string buildId,
