@@ -37,7 +37,7 @@ The following are proposed domain concepts, not existing source types:
 | MatchRecord | Authoritative terminal outcome plus the evidence and event history that support it. |
 | RatingProjection | A derived ladder view calculated from accepted match records and a versioned rating policy. |
 
-These should become typed, versioned contracts only when the first real vertical slice requires them. Do not pre-build a broad tournament schema for hypothetical modes.
+The first typed, versioned contracts now exist in `ServerApp.Core/CompetitionContracts.cs`: `CompetitionDefinition`, `CompetitionMatchFormat`, `BotBuildReference`, `MatchParticipantAssignment`, and immutable `MatchAssignment`. The validator pins game/ruleset/adapter versions and bot-build SHA-256 identities, rejects duplicate bot identities and unsupported team topology, and snapshots caller-owned collections. The initial topology vocabulary covers 1v1, 2v2, FFA, 3v3, 4v4, and 2v2v2. These are domain contracts and validation only—not a live catalogue, admission endpoint, persistence layer, or matchmaking service. Do not pre-build a broad tournament schema for hypothetical modes.
 
 ## 3. Ownership and trust boundaries
 
@@ -132,10 +132,10 @@ The order matters because ServerApp should not claim a live competitive system b
 
 ### Current state
 
-- **Implemented:** ServerApp's local role-manifest validation, deterministic dependency planning, in-memory capacity placement, Foundry workflow integration, and the open PR's candidate-scoped composition/lifecycle work.
+- **Implemented:** ServerApp's local role-manifest validation, deterministic dependency planning, in-memory capacity placement, Foundry workflow integration, and source-level competitive definition/assignment contracts with fail-closed topology and build-identity validation. PR #3's candidate-scoped composition/lifecycle work remains open and is not on `development`.
 - **Verified:** the ServerApp CI and contract checks passed for the current development revision used by the Competitive Ladder Lab deployment.
 - **Demonstrated:** the Pages UI can express match formats, participants, creator ownership, build policy, and architecture boundaries as a local simulation.
-- **Not implemented:** live competition catalogue, bot admission, matchmaking, SC2 game-session hosting, authenticated participant transport, authoritative result intake, persistent match history, rating calculations, team communication, or public ladder service.
+- **Not implemented:** live competition catalogue, bot admission workflow, matchmaking, SC2 game-session hosting, authenticated participant transport, authoritative result intake, persistent match history, rating calculations, team communication, or public ladder service. The new contracts do not imply any of those runtime capabilities.
 - **Not yet match-verified:** SingularityBot as a ladder-ready SC2 participant.
 
 Do not promote any of the last three categories to implemented based on a static simulation, schema validation, unit tests, or a successful Pages deployment.
