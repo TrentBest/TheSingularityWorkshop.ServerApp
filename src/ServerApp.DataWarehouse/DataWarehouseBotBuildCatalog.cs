@@ -11,6 +11,7 @@ namespace ServerApp.DataWarehouse;
 internal struct BotBuildSlot
 {
     public int Eligibility;
+    public long Revision;
     public ulong Hash0;
     public ulong Hash1;
     public ulong Hash2;
@@ -25,15 +26,38 @@ internal struct BotBuildSlot
 /// This is a hot runtime catalogue, not durable persistence. Callers must persist registration
 /// and eligibility changes through a separate durable store and rebuild this catalogue on startup.
 /// </remarks>
+public sealed class BotBuildCatalogSnapshot
+{
+    internal Guid OwnerId { get; }
+    internal IReadOnlyList<(DataHandle Handle, long Revision)> Entries { get; }
+    public IReadOnlyList<RegisteredBotBuild> Registrations { get; }
+
+    internal BotBuildCatalogSnapshot(
+        Guid ownerId,
+        IReadOnlyList<RegisteredBotBuild> registrations,
+        IReadOnlyList<(DataHandle Handle, long Revision)> entries)
+    {
+        OwnerId = ownerId;
+        Registrations = registrations;
+        Entries = entries;
+    }
+}
+
 public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, IDisposable
 {
     private readonly object _gate = new();
+    private readonly Guid _catalogId = Guid.NewGuid();
     private readonly global::TheSingularityWorkshop.DataWarehouse.DataWarehouse _warehouse;
     private readonly DataShelf<BotBuildSlot> _builds;
     private readonly Dictionary<(string BotIdentityId, string BuildId), DataHandle> _index = [];
+    private readonly Dictionary<int, (string BotIdentityId, string BuildId)> _keysBySlot = [];
     private int _disposed;
 
     public int Capacity => _builds.Capacity;
+    public int DirtyBuildCount
+    {
+        get { lock (_gate) { ThrowIfDisposed(); return _builds.DirtyCount; } }
+    }
     public int RegisteredBuildCount
     {
         get { lock (_gate) { ThrowIfDisposed(); return _index.Count; } }
@@ -100,17 +124,21 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
                 slot = new BotBuildSlot
                 {
                     Eligibility = (int)eligibility,
+                    Revision = 1,
                     Hash0 = BinaryPrimitives.ReadUInt64LittleEndian(hash.AsSpan(0, 8)),
                     Hash1 = BinaryPrimitives.ReadUInt64LittleEndian(hash.AsSpan(8, 8)),
                     Hash2 = BinaryPrimitives.ReadUInt64LittleEndian(hash.AsSpan(16, 8)),
                     Hash3 = BinaryPrimitives.ReadUInt64LittleEndian(hash.AsSpan(24, 8))
                 };
                 _index.Add(key, handle);
+                _keysBySlot.Add(handle.Slot, key);
                 error = null;
                 return true;
             }
             catch
             {
+                _index.Remove(key);
+                _keysBySlot.Remove(handle.Slot);
                 _builds.TryFree(handle);
                 throw;
             }
@@ -133,8 +161,14 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
             ThrowIfDisposed();
             if (!_index.TryGetValue((botIdentityId, buildId), out var handle) || !_builds.IsAlive(handle))
                 return false;
+            ref readonly var current = ref _builds.Read(handle);
+            if (current.Eligibility == (int)eligibility)
+                return true;
+
+            var nextRevision = checked(current.Revision + 1);
             ref var slot = ref _builds.GetRef(handle);
             slot.Eligibility = (int)eligibility;
+            slot.Revision = nextRevision;
             return true;
         }
     }
@@ -193,6 +227,7 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
                 if (!catalog.TryRegister(registration.Build, registration.Eligibility, out var error))
                     throw new InvalidDataException(error ?? "The durable bot-build snapshot contains an invalid record.");
             }
+            catalog.AcknowledgePersisted(catalog.CaptureDirtySnapshot());
             return catalog;
         }
         catch
@@ -200,6 +235,75 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
             catalog.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Captures only records whose DataWarehouse dirty bit is set. Persist the returned domain
+    /// registrations, then acknowledge this exact snapshot after the durable commit succeeds.
+    /// </summary>
+    public BotBuildCatalogSnapshot CaptureDirtySnapshot()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var dirtySlots = new int[_builds.DirtyCount];
+            var dirtyCount = _builds.CopyDirtySlots(dirtySlots);
+            var registrations = new List<RegisteredBotBuild>(dirtyCount);
+            var entries = new List<(DataHandle Handle, long Revision)>(dirtyCount);
+            for (var i = 0; i < dirtyCount; i++)
+            {
+                var slotIndex = dirtySlots[i];
+                if (!_keysBySlot.TryGetValue(slotIndex, out var key) ||
+                    !_index.TryGetValue(key, out var handle) ||
+                    handle.Slot != slotIndex || !_builds.IsAlive(handle))
+                    throw new InvalidOperationException("DataWarehouse dirty tracking and the catalogue index disagree.");
+
+                ref readonly var slot = ref _builds.Read(handle);
+                registrations.Add(CreateRegistration(key.BotIdentityId, key.BuildId, slot));
+                entries.Add((handle, slot.Revision));
+            }
+
+            return new BotBuildCatalogSnapshot(_catalogId, registrations.AsReadOnly(), entries.AsReadOnly());
+        }
+    }
+
+    /// <summary>
+    /// Clears dirty bits only for records unchanged since the captured snapshot. If a record
+    /// changed while its snapshot was being persisted, its newer revision remains dirty.
+    /// </summary>
+    public void AcknowledgePersisted(BotBuildCatalogSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (snapshot.OwnerId != _catalogId)
+                throw new ArgumentException("The snapshot belongs to another bot-build catalogue.", nameof(snapshot));
+
+            foreach (var entry in snapshot.Entries)
+            {
+                if (!_builds.IsAlive(entry.Handle))
+                    continue;
+                ref readonly var current = ref _builds.Read(entry.Handle);
+                if (current.Revision == entry.Revision)
+                    _builds.MarkClean(entry.Handle);
+            }
+        }
+    }
+
+    private static RegisteredBotBuild CreateRegistration(
+        string botIdentityId,
+        string buildId,
+        in BotBuildSlot slot)
+    {
+        Span<byte> hash = stackalloc byte[32];
+        BinaryPrimitives.WriteUInt64LittleEndian(hash[..8], slot.Hash0);
+        BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(8, 8), slot.Hash1);
+        BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(16, 8), slot.Hash2);
+        BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(24, 8), slot.Hash3);
+        return new RegisteredBotBuild(
+            new BotBuildReference(botIdentityId, buildId, Convert.ToHexString(hash)),
+            (BotBuildEligibilityStatus)slot.Eligibility);
     }
 
     /// <summary>
@@ -219,13 +323,7 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
                 if (!_builds.IsAlive(entry.Value))
                     continue;
                 ref readonly var slot = ref _builds.Read(entry.Value);
-                BinaryPrimitives.WriteUInt64LittleEndian(hash[..8], slot.Hash0);
-                BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(8, 8), slot.Hash1);
-                BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(16, 8), slot.Hash2);
-                BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(24, 8), slot.Hash3);
-                snapshot.Add(new RegisteredBotBuild(
-                    new BotBuildReference(entry.Key.BotIdentityId, entry.Key.BuildId, Convert.ToHexString(hash)),
-                    (BotBuildEligibilityStatus)slot.Eligibility));
+                snapshot.Add(CreateRegistration(entry.Key.BotIdentityId, entry.Key.BuildId, slot));
             }
             return snapshot.AsReadOnly();
         }
@@ -240,6 +338,7 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             _index.Clear();
+            _keysBySlot.Clear();
             _warehouse.Dispose();
         }
     }
