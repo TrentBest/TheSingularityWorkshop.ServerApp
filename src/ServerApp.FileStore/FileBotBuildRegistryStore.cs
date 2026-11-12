@@ -83,7 +83,9 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
             bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough))
         {
             await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            // Once the complete frame has been written, do not let caller cancellation interrupt
+            // the durability barrier and leave the commit outcome ambiguous.
+            await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             stream.Flush(flushToDisk: true);
         }
 
