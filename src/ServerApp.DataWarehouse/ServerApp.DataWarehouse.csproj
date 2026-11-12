@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ServerApp.Core/ServerApp.Core.csproj" />
+    <ProjectReference Include="../../_deps/TheSingularityWorkshop.DataWarehouse/src/TheSingularityWorkshop.DataWarehouse/TheSingularityWorkshop.DataWarehouse.csproj" />
+  </ItemGroup>
+</Project>
