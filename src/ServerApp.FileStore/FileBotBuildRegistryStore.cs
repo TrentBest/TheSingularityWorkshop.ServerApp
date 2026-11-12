@@ -156,6 +156,7 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
         var offset = 0;
         var registrations = ToDictionary(snapshot.Registrations);
         var revision = snapshot.Revision;
+        long previousJournalRevision = 0;
 
         while (offset < bytes.Length)
         {
@@ -173,6 +174,8 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
             var schemaVersion = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(8, 4));
             var frameRevision = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(12, 8));
             var payloadLength = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(20, 4));
+            if (frameRevision <= previousJournalRevision)
+                throw new InvalidDataException("Journal revisions must be positive and strictly increasing.");
             if (payloadLength < 0 || payloadLength > MaximumFrameLength)
                 throw new InvalidDataException($"Journal frame length is invalid at byte offset {offset}.");
 
@@ -199,6 +202,7 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
                 ApplyJournalPayload(frame.Slice(24, payloadLength), registrations);
                 revision = frameRevision;
             }
+            previousJournalRevision = frameRevision;
             // Valid older frames are expected after a checkpoint is installed but before
             // journal truncation completes. Their checksums and schemas are still verified.
 
