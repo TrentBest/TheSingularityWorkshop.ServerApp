@@ -116,9 +116,12 @@ static async Task CompactsCheckpoint()
         Registration("bot-a", "build-a", 'a'),
         Registration("bot-b", "build-b", 'b'))) == BotBuildRegistryCommitResult.Committed,
         "Second commit failed.");
-    await store.CompactAsync();
     var journal = Path.Combine(directory.Path, "bot-build-registry.journal");
+    var preCompactionJournal = await File.ReadAllBytesAsync(journal);
+    await store.CompactAsync();
     Assert(new FileInfo(journal).Length == 0, "Compaction did not rotate the journal after checkpoint installation.");
+    // Recreate the safe crash window: checkpoint is installed, but the old journal remains.
+    await File.WriteAllBytesAsync(journal, preCompactionJournal);
     var reopened = await new FileBotBuildRegistryStore(directory.Path).LoadAsync();
     Assert(reopened.Revision == 2 && reopened.Registrations.Count == 2,
         "The compacted checkpoint did not reconstruct the authoritative registry.");
