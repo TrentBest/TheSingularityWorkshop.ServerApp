@@ -73,6 +73,12 @@ jobs:
       - name: Run DataWarehouse integration contract checks
         run: |
           dotnet run --project tests/ServerApp.DataWarehouse.ContractChecks/ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
+      - name: Build database-free file store
+        run: |
+          dotnet build src/ServerApp.FileStore/ServerApp.FileStore.csproj --configuration Release
+      - name: Run file-store durability contract checks
+        run: |
+          dotnet run --project tests/ServerApp.FileStore.ContractChecks/ServerApp.FileStore.ContractChecks.csproj --configuration Release
       - name: Run Foundry host contract checks
         run: |
           dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
