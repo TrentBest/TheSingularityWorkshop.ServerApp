@@ -50,12 +50,22 @@ The [Competitive Ladder Lab](https://trentbest.github.io/TheSingularityWorkshop.
 
 Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. The solution includes Core, CLI, MachineReport, the DataWarehouse integration, and Core ContractChecks.
 
-The DataWarehouse integration intentionally builds against the repository's active source rather than a published NuGet package. Check out its pinned source before building the full solution:
+The default ServerApp solution and core contract checks do not require DataWarehouse. The fixed-record catalogue is an optional integration in its own project and its own contract-check executable. CI checks it from a pinned source checkout, so we can harden the integration without making it a dependency of every ServerApp consumer.
+
+To build the dependency-free core:
+
+```powershell
+dotnet build .\ServerApp.sln --configuration Release
+dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
+```
+
+To opt into the DataWarehouse integration, check out its pinned source and run its dedicated build and checks:
 
 ```powershell
 git clone https://github.com/TrentBest/TheSingularityWorkshop.DataWarehouse.git _deps/TheSingularityWorkshop.DataWarehouse
 git -C _deps/TheSingularityWorkshop.DataWarehouse checkout a019d006dbb2eb4cb525cd3977c9eafaf6eee616
-dotnet build .\ServerApp.sln --configuration Release
+dotnet build .\src\ServerApp.DataWarehouse\ServerApp.DataWarehouse.csproj --configuration Release
+dotnet run --project .\tests\ServerApp.DataWarehouse.ContractChecks\ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
 ```
 
 The competitive ladder's bot-build registry now has a host-owned atomic snapshot/CAS contract and a DataWarehouse coordinator that builds a candidate hot catalogue, commits the next durable revision, and only then makes it visible. No concrete database or file format is selected yet; the contract checks use an in-memory failure-injection store, so this is not a claim of disk durability. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
