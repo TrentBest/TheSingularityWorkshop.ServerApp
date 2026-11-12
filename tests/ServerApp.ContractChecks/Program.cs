@@ -42,7 +42,10 @@ var checks = new (string Name, Func<Task> Run)[]
     ("DataWarehouse catalogue handles thousands of fixed-record builds", DataWarehouseCatalogHandlesLargeBuildSets),
     ("DataWarehouse catalogue serializes concurrent callers", DataWarehouseCatalogSerializesConcurrentCallers),
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
-    ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration)
+    ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration),
+    ("durable registry commits before publishing and recovers after restart", DurableRegistryCommitsBeforePublishingAndRecovers),
+    ("durable registry leaves visible state unchanged after store failure", DurableRegistryStoreFailureLeavesVisibleState),
+    ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility)
 };
 
 var failures = new List<string>();
@@ -823,5 +826,100 @@ sealed class TestBotBuildCatalog(
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(
             builds.TryGetValue((botIdentityId, buildId), out var registration) ? registration : null);
+    }
+}
+
+
+static async Task DurableRegistryCommitsBeforePublishingAndRecovers()
+{
+    var store = new TestBotBuildRegistryStore();
+    using (var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64))
+    {
+        var result = await registry.RegisterAsync(
+            new BotBuildReference("bot-a", "build-a", new string('a', 64)),
+            BotBuildEligibilityStatus.Eligible);
+        var visible = await registry.FindBuildAsync("bot-a", "build-a");
+        Assert(result.Committed && registry.Revision == 1 &&
+               store.Snapshot.Revision == 1 &&
+               visible?.Eligibility == BotBuildEligibilityStatus.Eligible,
+            "A successful durable registration was not committed and published at revision 1.");
+    }
+
+    using var restarted = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    var recovered = await restarted.FindBuildAsync("bot-a", "build-a");
+    Assert(restarted.Revision == 1 &&
+           recovered?.Build.ContentSha256 == new string('A', 64) &&
+           recovered.Eligibility == BotBuildEligibilityStatus.Eligible,
+        "A fresh registry instance did not recover the exact durable registration.");
+}
+
+static async Task DurableRegistryStoreFailureLeavesVisibleState()
+{
+    var store = new TestBotBuildRegistryStore();
+    using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    store.FailNextCommit = true;
+    try
+    {
+        await registry.RegisterAsync(
+            new BotBuildReference("bot-a", "build-a", new string('b', 64)),
+            BotBuildEligibilityStatus.Eligible);
+        throw new InvalidOperationException("The simulated durable commit failure was not propagated.");
+    }
+    catch (IOException)
+    {
+        var visible = await registry.FindBuildAsync("bot-a", "build-a");
+        Assert(registry.Revision == 0 && store.Snapshot.Revision == 0 && visible is null,
+            "A failed durable commit changed the visible catalogue or durable revision.");
+    }
+}
+
+static async Task DurableRegistryPersistsEligibility()
+{
+    var store = new TestBotBuildRegistryStore(new BotBuildRegistrySnapshot(0,
+    [
+        new RegisteredBotBuild(
+            new BotBuildReference("bot-a", "build-a", new string('c', 64)),
+            BotBuildEligibilityStatus.PendingReview)
+    ]));
+    using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    var result = await registry.SetEligibilityAsync("bot-a", "build-a", BotBuildEligibilityStatus.Eligible);
+    var visible = await registry.FindBuildAsync("bot-a", "build-a");
+    Assert(result.Committed && registry.Revision == 1 &&
+           store.Snapshot.Registrations.Single().Eligibility == BotBuildEligibilityStatus.Eligible &&
+           visible?.Eligibility == BotBuildEligibilityStatus.Eligible,
+        "Eligibility was exposed without a matching durable registry commit.");
+}
+
+sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
+{
+    public BotBuildRegistrySnapshot Snapshot { get; private set; }
+    public bool FailNextCommit { get; set; }
+
+    public TestBotBuildRegistryStore(BotBuildRegistrySnapshot? initial = null) =>
+        Snapshot = initial ?? new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
+
+    public ValueTask<BotBuildRegistrySnapshot> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(Snapshot);
+    }
+
+    public ValueTask<BotBuildRegistryCommitResult> CommitAsync(
+        long expectedRevision,
+        BotBuildRegistrySnapshot replacement,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (FailNextCommit)
+        {
+            FailNextCommit = false;
+            throw new IOException("Simulated durable write failure.");
+        }
+        if (Snapshot.Revision != expectedRevision)
+            return ValueTask.FromResult(BotBuildRegistryCommitResult.RevisionConflict);
+        if (replacement.Revision != expectedRevision + 1)
+            throw new InvalidOperationException("Replacement revision must advance exactly once.");
+        Snapshot = replacement;
+        return ValueTask.FromResult(BotBuildRegistryCommitResult.Committed);
     }
 }
