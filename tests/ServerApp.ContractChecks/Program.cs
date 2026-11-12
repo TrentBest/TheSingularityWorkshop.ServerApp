@@ -37,6 +37,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("1v1 admission rejects ineligible build states", MatchAdmissionRejectsIneligibleBuilds),
     ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild),
     ("DataWarehouse catalogue stores and resolves immutable build records", DataWarehouseCatalogStoresBuilds),
+    ("DataWarehouse catalogue restores from durable domain snapshots", DataWarehouseCatalogRestoresSnapshot),
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
     ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration)
 };
@@ -174,6 +175,28 @@ static async Task DataWarehouseCatalogStoresBuilds()
     Assert(snapshot.Count == 1 && snapshot[0].Build.BotIdentityId == "bot-a" &&
            snapshot[0].Build.BuildId == "build-a",
         "The durable-boundary snapshot did not reproduce the registered domain record.");
+}
+
+static async Task DataWarehouseCatalogRestoresSnapshot()
+{
+    var sourceSnapshot = new[]
+    {
+        new RegisteredBotBuild(
+            new BotBuildReference("bot-a", "build-a", new string('e', 64)),
+            BotBuildEligibilityStatus.Eligible),
+        new RegisteredBotBuild(
+            new BotBuildReference("bot-b", "build-b", new string('f', 64)),
+            BotBuildEligibilityStatus.Suspended)
+    };
+    using var restored = DataWarehouseBotBuildCatalog.RestoreSnapshot(sourceSnapshot, capacity: 4, pageSize: 64);
+    var first = await restored.FindBuildAsync("bot-a", "build-a");
+    var second = await restored.FindBuildAsync("bot-b", "build-b");
+    Assert(restored.RegisteredBuildCount == 2 &&
+           first?.Eligibility == BotBuildEligibilityStatus.Eligible &&
+           second?.Eligibility == BotBuildEligibilityStatus.Suspended &&
+           first.Build.ContentSha256 == new string('E', 64) &&
+           second.Build.ContentSha256 == new string('F', 64),
+        "The DataWarehouse hot catalogue did not faithfully restore a durable domain snapshot.");
 }
 
 static async Task DataWarehouseCatalogUpdatesEligibility()
