@@ -17,10 +17,10 @@
 - `src/ServerApp.Core/CompetitionContracts.cs`: competition definitions, match formats, immutable bot-build references, match participant assignments, and fail-closed assignment validation. Initial topology vocabulary includes 1v1, 2v2, FFA, 3v3, 4v4, and 2v2v2.
 - `src/ServerApp.Core/MatchAdmissionService.cs`: host-independent 1v1 admission resolves exact bot identity + immutable build ID, accepts only Eligible builds, and snapshots the selected build identities before launch. It does not queue, launch, or rate matches.
 - `src/ServerApp.DataWarehouse/DataWarehouseBotBuildCatalog.cs`: DataWarehouse-backed fixed-record hot catalogue. Shelf access is serialized at the adapter boundary; handles/native addresses do not escape; dirty snapshots and revision-safe acknowledgements are supported. This is process-local hot storage, not durability.
-- `src/ServerApp.Core/BotBuildRegistryStoreContracts.cs`: immutable domain snapshot and host-owned atomic compare-and-swap store contract. Revision tokens are store-wide versions, not DataWarehouse handles.
+- `src/ServerApp.Core/BotBuildRegistryStoreContracts.cs`: immutable domain snapshot and host-owned atomic compare-and-swap store contract. Snapshots carry explicit schema version 1; stores must migrate supported older payloads and reject unknown versions. Revision tokens are store-wide versions, not DataWarehouse handles.
 - `src/ServerApp.DataWarehouse/DurableBotBuildRegistry.cs`: candidate catalogue is built and validated off to the side, the host store commits first, and only then is the replacement hot catalogue made visible. Failed writes and revision conflicts leave the previous catalogue visible; stale instances can call `ReloadAsync`.
 - `tests/ServerApp.ContractChecks/Program.cs`: 33 core contract checks cover manifest/provisioning, placement, competition contracts, and 1v1 admission without a DataWarehouse dependency.
-- `tests/ServerApp.DataWarehouse.ContractChecks/`: 11 optional integration checks cover fixed-record catalogue behavior, scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
+- `tests/ServerApp.DataWarehouse.ContractChecks/`: 12 optional integration checks cover fixed-record catalogue behavior, scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
 
 ## Durability boundary — decision still open
 
@@ -33,7 +33,7 @@
 ## Verification and sequencing
 
 - Earlier evidence remains valid only for its cited revisions: ServerApp CI run [#43184712816](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712816) passed for the earlier DataWarehouse integration revision, and Pages run [#43184712477](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712477) passed for its corresponding revision.
-- The dependency split preserves the same 44 authored checks as 33 core checks plus 11 DataWarehouse integration checks. The updated CI workflow now builds/runs the optional integration separately after checking out its pinned source. This revision has not yet been verified by CI; do not describe either suite as passing until CI executes on the relevant commit.
+- The dependency split preserves the 45 authored checks as 33 core checks plus 11 DataWarehouse integration checks. The updated CI workflow now builds/runs the optional integration separately after checking out its pinned source. This revision has not yet been verified by CI; do not describe either suite as passing until CI executes on the relevant commit.
 - Sith policy is a publish/release gate, not a development/execution blocker. Extra branch cleanup remains owner-controlled.
 - PR #3 remains draft, open, unmerged, and contains candidate-scoped composition/lifecycle work not yet on `development`. Do not duplicate that work or merge it without explicit authorization. Issue #7 lifecycle sequencing remains gated on PR #3.
 - Issue #9 tracks durable persistence/recovery: [Persist and recover the DataWarehouse-backed bot-build catalogue](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
@@ -43,7 +43,7 @@
 1. Preserve direct development-branch work; inspect current source, tests, docs, workflows, and commit evidence before each implementation slice.
 2. Keep the core host and its contract checks dependency-free. Build and verify DataWarehouse only through its explicit integration project and dedicated checks.
 3. Resolve the persistence choice with the owner, then implement a concrete store behind `IBotBuildRegistryStore` without moving durability into DataWarehouse.
-4. Verify schema versioning, corruption handling, duplicates, interrupted writes, atomic replacement/transaction behavior, compare-and-swap concurrency, restart recovery, and failure injection.
+4. Implement and verify the concrete store's schema migration, corruption handling, duplicates, interrupted writes, atomic replacement/transaction behavior, compare-and-swap concurrency, restart recovery, and failure injection. The current domain contract now rejects unknown schema versions; it does not itself migrate serialized files.
 5. Run the complete ServerApp CI and both contract-check suites against the resulting revision; distinguish source implementation from verified behavior.
 6. Continue the 1v1 vertical slice only after the store/recovery boundary is proven, then add the SC2 game-session adapter and authoritative result intake.
 7. Keep 2v2, FFA, 3v3, 4v4, ratings, and multi-host operation staged behind real 1v1 evidence.
