@@ -178,6 +178,8 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
                 throw new InvalidDataException("Journal revisions must be positive and strictly increasing.");
             if (payloadLength < 0 || payloadLength > MaximumFrameLength)
                 throw new InvalidDataException($"Journal frame length is invalid at byte offset {offset}.");
+            if (schemaVersion != BotBuildRegistrySnapshot.CurrentSchemaVersion)
+                throw new NotSupportedException($"Journal schema version {schemaVersion} is not supported.");
 
             var frameLength = checked(24L + payloadLength + ChecksumLength);
             if (frameLength > remaining)
@@ -185,9 +187,6 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
                 RepairTail(repairTornTail, offset);
                 break;
             }
-
-            if (schemaVersion != BotBuildRegistrySnapshot.CurrentSchemaVersion)
-                throw new NotSupportedException($"Journal schema version {schemaVersion} is not supported.");
 
             var frame = span[..(int)frameLength];
             var expectedChecksum = SHA256.HashData(frame[..(24 + payloadLength)]);
