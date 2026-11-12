@@ -48,7 +48,7 @@ The [Competitive Ladder Lab](https://trentbest.github.io/TheSingularityWorkshop.
 
 ## 🟦 Open the repository in Visual Studio
 
-Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. The solution includes Core, CLI, MachineReport, the DataWarehouse integration, and Core ContractChecks.
+Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. The default solution includes Core, CLI, MachineReport, and dependency-free Core ContractChecks. The optional DataWarehouse adapter and its integration checks are built separately when that capability is needed.
 
 The default ServerApp solution and core contract checks do not require DataWarehouse. The fixed-record catalogue is an optional integration in its own project and its own contract-check executable. CI checks it from a pinned source checkout, so we can harden the integration without making it a dependency of every ServerApp consumer.
 
