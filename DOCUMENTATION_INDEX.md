@@ -7,6 +7,7 @@
 - [README](README.md) — project orientation and current maturity.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server-role taxonomy, manifest-driven provisioning, and proof sequence.
 - [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — the Foundry → FSM_COS → role-adapter workflow, pinned source dependencies, and proof boundaries.
+- [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) — proposed boundaries, ownership, trust model, match-format progression, and evidence gates.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — product vision captured 2026-11-01, including landing experiences, service roles, authentication flow, elastic Experience compute, and Renderer.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first versioned manifest shape, adapter boundary, and local provisioning proof.
 - [Agent Onboarding](AGENTS.md) — contribution and repository rules.
