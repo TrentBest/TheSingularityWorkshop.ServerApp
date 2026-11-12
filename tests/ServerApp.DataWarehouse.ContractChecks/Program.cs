@@ -14,7 +14,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("durable registry leaves visible state unchanged after store failure", DurableRegistryStoreFailureLeavesVisibleState),
     ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility),
     ("durable registry fails closed on a stale store revision", DurableRegistryRejectsStaleRevision),
-    ("durable registry snapshots reject unknown schema versions", DurableRegistryRejectsUnknownSchemaVersion)
+    ("durable registry snapshots reject unknown schema versions", DurableRegistryRejectsUnknownSchemaVersion),
+    ("separate registry instances arbitrate concurrent durable commits", DurableRegistryArbitratesConcurrentInstances)
 };
 
 var failures = new List<string>();
@@ -271,6 +272,45 @@ static async Task DurableRegistryPersistsEligibility()
         "Eligibility was exposed without a matching durable registry commit.");
 }
 
+static async Task DurableRegistryArbitratesConcurrentInstances()
+{
+    var store = new TestBotBuildRegistryStore();
+    using var first = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    using var second = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+
+    var results = await Task.WhenAll(
+        first.RegisterAsync(
+            new BotBuildReference("bot-a", "build-a", new string('a', 64)),
+            BotBuildEligibilityStatus.Eligible).AsTask(),
+        second.RegisterAsync(
+            new BotBuildReference("bot-b", "build-b", new string('b', 64)),
+            BotBuildEligibilityStatus.Eligible).AsTask());
+
+    Assert(results.Count(result => result.Committed) == 1 &&
+           store.Snapshot.Revision == 1 &&
+           store.Snapshot.Registrations.Count == 1,
+        "Two registry instances committed conflicting replacements against the same store revision.");
+
+    var winner = results[0].Committed ? first : second;
+    var loser = results[0].Committed ? second : first;
+    var winnerBuild = results[0].Committed ? "build-a" : "build-b";
+    var loserBuild = results[0].Committed ? "build-b" : "build-a";
+    Assert((await winner.FindBuildAsync(results[0].Committed ? "bot-a" : "bot-b", winnerBuild)) is not null &&
+           (await loser.FindBuildAsync(results[0].Committed ? "bot-b" : "bot-a", loserBuild)) is null,
+        "The losing registry instance exposed a candidate that did not win the durable compare-and-swap.");
+
+    await loser.ReloadAsync();
+    var retry = await loser.RegisterAsync(
+        new BotBuildReference(
+            results[0].Committed ? "bot-b" : "bot-a",
+            loserBuild,
+            new string(results[0].Committed ? 'b' : 'a', 64)),
+        BotBuildEligibilityStatus.Eligible);
+    Assert(retry.Committed && store.Snapshot.Revision == 2 &&
+           store.Snapshot.Registrations.Count == 2,
+        "The losing registry instance did not reload and retry against the winning revision.");
+}
+
 static Task DurableRegistryRejectsUnknownSchemaVersion()
 {
     try
@@ -313,16 +353,22 @@ static async Task DurableRegistryRejectsStaleRevision()
 
 sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
 {
-    public BotBuildRegistrySnapshot Snapshot { get; set; }
+    private readonly object _gate = new();
+    private BotBuildRegistrySnapshot _snapshot;
+    public BotBuildRegistrySnapshot Snapshot
+    {
+        get { lock (_gate) return _snapshot; }
+        set { lock (_gate) _snapshot = value; }
+    }
     public bool FailNextCommit { get; set; }
 
     public TestBotBuildRegistryStore(BotBuildRegistrySnapshot? initial = null) =>
-        Snapshot = initial ?? new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
+        _snapshot = initial ?? new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
 
     public ValueTask<BotBuildRegistrySnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Snapshot);
+        lock (_gate) return ValueTask.FromResult(_snapshot);
     }
 
     public ValueTask<BotBuildRegistryCommitResult> CommitAsync(
@@ -331,16 +377,19 @@ sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (FailNextCommit)
+        lock (_gate)
         {
-            FailNextCommit = false;
-            throw new IOException("Simulated durable write failure.");
+            if (FailNextCommit)
+            {
+                FailNextCommit = false;
+                throw new IOException("Simulated durable write failure.");
+            }
+            if (_snapshot.Revision != expectedRevision)
+                return ValueTask.FromResult(BotBuildRegistryCommitResult.RevisionConflict);
+            if (replacement.Revision != expectedRevision + 1)
+                throw new InvalidOperationException("Replacement revision must advance exactly once.");
+            _snapshot = replacement;
+            return ValueTask.FromResult(BotBuildRegistryCommitResult.Committed);
         }
-        if (Snapshot.Revision != expectedRevision)
-            return ValueTask.FromResult(BotBuildRegistryCommitResult.RevisionConflict);
-        if (replacement.Revision != expectedRevision + 1)
-            throw new InvalidOperationException("Replacement revision must advance exactly once.");
-        Snapshot = replacement;
-        return ValueTask.FromResult(BotBuildRegistryCommitResult.Committed);
     }
 }
