@@ -58,6 +58,8 @@ git -C _deps/TheSingularityWorkshop.DataWarehouse checkout a019d006dbb2eb4cb525c
 dotnet build .\ServerApp.sln --configuration Release
 ```
 
+The competitive ladder's bot-build registry now has a host-owned atomic snapshot/CAS contract and a DataWarehouse coordinator that builds a candidate hot catalogue, commits the next durable revision, and only then makes it visible. No concrete database or file format is selected yet; the contract checks use an in-memory failure-injection store, so this is not a claim of disk durability. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
+
 The Foundry host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
 
 ## 🟢 05 — Inspect a deployment machine
