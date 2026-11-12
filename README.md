@@ -59,6 +59,15 @@ dotnet build .\ServerApp.sln --configuration Release
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
 ```
 
+To build and exercise the database-free file store (it has no external dependencies), run:
+
+```powershell
+dotnet build .\\src\\ServerApp.FileStore\\ServerApp.FileStore.csproj --configuration Release
+dotnet run --project tests/ServerApp.FileStore.ContractChecks/ServerApp.FileStore.ContractChecks.csproj --configuration Release
+```
+
+The file store is intentionally outside the default solution. It is an opt-in host-storage adapter; the host opens it through `IBotBuildRegistryStore` and supplies it to `DurableBotBuildRegistry.OpenAsync`.
+
 To opt into the DataWarehouse integration, check out its pinned source and run its dedicated build and checks:
 
 ```powershell
