@@ -169,7 +169,7 @@ public sealed class DurableBotBuildRegistry : IRegisteredBotBuildCatalog, IDispo
         CancellationToken cancellationToken)
     {
         var nextRevision = checked(_revision + 1);
-        var replacement = new BotBuildRegistrySnapshot(nextRevision, registrations);
+        var replacement = new BotBuildRegistrySnapshot(nextRevision, registrations, BotBuildRegistrySnapshot.CurrentSchemaVersion);
 
         // Build and validate the complete candidate before committing. It is not yet visible.
         var candidate = DataWarehouseBotBuildCatalog.RestoreSnapshot(
