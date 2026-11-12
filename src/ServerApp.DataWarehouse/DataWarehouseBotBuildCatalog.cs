@@ -169,6 +169,38 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
     }
 
     /// <summary>
+    /// Rehydrates a process-local catalogue from a host-owned durable snapshot.
+    /// The supplied records remain the durable source; the returned shelves are only a hot index.
+    /// </summary>
+    public static DataWarehouseBotBuildCatalog RestoreSnapshot(
+        IEnumerable<RegisteredBotBuild> registrations,
+        int capacity,
+        int pageSize = 4096)
+    {
+        ArgumentNullException.ThrowIfNull(registrations);
+        var snapshot = registrations.ToArray();
+        if (snapshot.Length > capacity)
+            throw new InvalidDataException("The durable snapshot exceeds the configured DataWarehouse shelf capacity.");
+
+        var catalog = new DataWarehouseBotBuildCatalog(capacity, pageSize);
+        try
+        {
+            foreach (var registration in snapshot)
+            {
+                if (registration is null || registration.Build is null ||
+                    !catalog.TryRegister(registration.Build, registration.Eligibility, out var error))
+                    throw new InvalidDataException(error ?? "The durable bot-build snapshot contains an invalid record.");
+            }
+            return catalog;
+        }
+        catch
+        {
+            catalog.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Copies domain registrations out of the hot shelf for a host-owned durable snapshot.
     /// No DataHandle or native address is exposed as a durable identity.
     /// </summary>
