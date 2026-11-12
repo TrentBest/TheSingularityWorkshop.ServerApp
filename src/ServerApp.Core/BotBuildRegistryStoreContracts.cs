@@ -29,7 +29,7 @@ public enum BotBuildRegistryCommitResult
 /// <summary>
 /// Host-owned durability boundary. CommitAsync must atomically and durably replace the complete
 /// snapshot iff its current revision equals expectedRevision. It must not report Committed before
-/// the replacement is durable. Implementations own file/database/replication policy.
+/// the replacement is durable. An implementation must not throw after a commit has taken effect; it must return Committed for that outcome. If a caller receives a revision conflict, it reloads the authoritative snapshot before retrying. Implementations own file/database/replication policy.
 /// </summary>
 public interface IBotBuildRegistryStore
 {
