@@ -848,6 +848,14 @@ static async Task DurableRegistryRejectsStaleRevision()
            registry.Revision == 0 && visible is null &&
            store.Snapshot.Revision == 1 && store.Snapshot.Registrations.Count == 0,
         "A stale registry instance published a mutation after its compare-and-swap was rejected.");
+
+    await registry.ReloadAsync();
+    var retried = await registry.RegisterAsync(
+        new BotBuildReference("bot-a", "build-a", new string('d', 64)),
+        BotBuildEligibilityStatus.Eligible);
+    Assert(retried.Committed && registry.Revision == 2 &&
+           (await registry.FindBuildAsync("bot-a", "build-a"))?.Eligibility == BotBuildEligibilityStatus.Eligible,
+        "The registry did not reload the authoritative revision before retrying.");
 }
 
 static void Assert(bool condition, string message)
