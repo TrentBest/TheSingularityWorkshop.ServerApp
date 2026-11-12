@@ -15,7 +15,8 @@ public interface IEligibleBotBuildCatalog
 /// <summary>A participant request before its immutable build has been resolved.</summary>
 public sealed record MatchAdmissionParticipant(
     string ParticipantId,
-    string BotIdentityId);
+    string BotIdentityId,
+    string BuildId);
 
 /// <summary>Admission request for the first supported competitive vertical slice.</summary>
 public sealed record MatchAdmissionRequest(
@@ -37,12 +38,12 @@ public sealed record MatchAdmissionResult(
 public sealed class MatchAdmissionService
 {
     private readonly CompetitionDefinition _competition;
-    private readonly IEligibleBotBuildCatalog _buildCatalog;
+    private readonly IRegisteredBotBuildCatalog _buildCatalog;
     private readonly string _gameAdapterVersion;
 
     public MatchAdmissionService(
         CompetitionDefinition competition,
-        IEligibleBotBuildCatalog buildCatalog,
+        IRegisteredBotBuildCatalog buildCatalog,
         string gameAdapterVersion)
     {
         ArgumentNullException.ThrowIfNull(competition);
@@ -84,24 +85,15 @@ public sealed class MatchAdmissionService
             return new(null, Array.AsReadOnly(errors.ToArray()));
 
         cancellationToken.ThrowIfCancellationRequested();
-        var firstBuild = await _buildCatalog.FindEligibleBuildAsync(
-            request.First.BotIdentityId, cancellationToken).ConfigureAwait(false);
-        var secondBuild = await _buildCatalog.FindEligibleBuildAsync(
-            request.Second.BotIdentityId, cancellationToken).ConfigureAwait(false);
+        var firstRegistration = await _buildCatalog.FindBuildAsync(
+            request.First.BotIdentityId, request.First.BuildId, cancellationToken).ConfigureAwait(false);
+        var secondRegistration = await _buildCatalog.FindBuildAsync(
+            request.Second.BotIdentityId, request.Second.BuildId, cancellationToken).ConfigureAwait(false);
+        var firstBuild = firstRegistration?.Build;
+        var secondBuild = secondRegistration?.Build;
 
-        if (firstBuild is null)
-            errors.Add(new("admission.bot-build.ineligible",
-                $"No eligible registered build was found for bot identity '{request.First.BotIdentityId}'."));
-        else if (!string.Equals(firstBuild.BotIdentityId, request.First.BotIdentityId, StringComparison.Ordinal))
-            errors.Add(new("admission.bot-build.identity-mismatch",
-                "The first catalog result does not belong to the requested bot identity."));
-
-        if (secondBuild is null)
-            errors.Add(new("admission.bot-build.ineligible",
-                $"No eligible registered build was found for bot identity '{request.Second.BotIdentityId}'."));
-        else if (!string.Equals(secondBuild.BotIdentityId, request.Second.BotIdentityId, StringComparison.Ordinal))
-            errors.Add(new("admission.bot-build.identity-mismatch",
-                "The second catalog result does not belong to the requested bot identity."));
+        ValidateBuildRegistration(firstRegistration, request.First, "first", errors);
+        ValidateBuildRegistration(secondRegistration, request.Second, "second", errors);
 
         if (errors.Count > 0)
             return new(null, Array.AsReadOnly(errors.ToArray()));
@@ -126,6 +118,34 @@ public sealed class MatchAdmissionService
             : new(null, Array.AsReadOnly(errors.ToArray()));
     }
 
+    private static void ValidateBuildRegistration(
+        RegisteredBotBuild? registration,
+        MatchAdmissionParticipant participant,
+        string position,
+        ICollection<CompetitionContractError> errors)
+    {
+        if (registration is null)
+        {
+            errors.Add(new("admission.bot-build.not-found",
+                $"Build '{participant.BuildId}' was not found for bot identity '{participant.BotIdentityId}'."));
+            return;
+        }
+
+        var build = registration.Build;
+        if (build is null ||
+            !string.Equals(build.BotIdentityId, participant.BotIdentityId, StringComparison.Ordinal) ||
+            !string.Equals(build.BuildId, participant.BuildId, StringComparison.Ordinal))
+        {
+            errors.Add(new($"admission.bot-build.{position}.identity-mismatch",
+                $"The catalog result does not match the requested bot identity and exact build ID for the {position} participant."));
+            return;
+        }
+
+        if (registration.Eligibility != BotBuildEligibilityStatus.Eligible)
+            errors.Add(new($"admission.bot-build.{position}.ineligible",
+                $"Build '{participant.BuildId}' is not eligible for competition (status: {registration.Eligibility})."));
+    }
+
     private static void ValidateParticipant(
         MatchAdmissionParticipant? participant,
         string position,
@@ -144,5 +164,8 @@ public sealed class MatchAdmissionService
         if (string.IsNullOrWhiteSpace(participant.BotIdentityId))
             errors.Add(new($"admission.bot-identity.{position}.id",
                 $"The {position} bot identity ID must be non-empty."));
+        if (string.IsNullOrWhiteSpace(participant.BuildId))
+            errors.Add(new($"admission.bot-build.{position}.id",
+                $"The {position} build ID must be non-empty."));
     }
 }
