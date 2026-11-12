@@ -62,7 +62,7 @@ dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csp
 To build and exercise the database-free file store (it has no external dependencies), run:
 
 ```powershell
-dotnet build .\\src\\ServerApp.FileStore\\ServerApp.FileStore.csproj --configuration Release
+dotnet build .\src\ServerApp.FileStore\ServerApp.FileStore.csproj --configuration Release
 dotnet run --project tests/ServerApp.FileStore.ContractChecks/ServerApp.FileStore.ContractChecks.csproj --configuration Release
 ```
 
