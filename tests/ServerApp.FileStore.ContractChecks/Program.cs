@@ -81,7 +81,8 @@ static async Task RecoversTornTail()
            BotBuildRegistryCommitResult.Committed, "Initial commit failed.");
     var journal = Path.Combine(directory.Path, "bot-build-registry.journal");
     var validLength = new FileInfo(journal).Length;
-    await File.AppendAllBytesAsync(journal, [0x53, 0x42, 0x52, 0x4A, 0x00]);
+    await using (var tail = new FileStream(journal, FileMode.Append, FileAccess.Write, FileShare.Read))
+        await tail.WriteAsync(new byte[] { 0x53, 0x42, 0x52, 0x4A, 0x00 });
     var recovered = await store.LoadAsync();
     Assert(recovered.Revision == 1 && new FileInfo(journal).Length == validLength,
         "Recovery did not truncate only the incomplete trailing frame.");
