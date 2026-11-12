@@ -1,5 +1,6 @@
 using ServerApp.Core;
 using ServerApp.DataWarehouse;
+using ServerApp.FileStore;
 
 var checks = new (string Name, Func<Task> Run)[]
 {
@@ -11,6 +12,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
     ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration),
     ("durable registry commits before publishing and recovers after restart", DurableRegistryCommitsBeforePublishingAndRecovers),
+    ("file-backed durable registry rebuilds the DataWarehouse catalogue after restart", FileBackedDurableRegistryRestoresHotCatalogue),
     ("durable registry leaves visible state unchanged after store failure", DurableRegistryStoreFailureLeavesVisibleState),
     ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility),
     ("durable registry fails closed on a stale store revision", DurableRegistryRejectsStaleRevision),
@@ -233,6 +235,37 @@ static async Task DurableRegistryCommitsBeforePublishingAndRecovers()
            recovered.Build.ContentSha256 == new string('A', 64) &&
            recovered.Eligibility == BotBuildEligibilityStatus.Eligible,
         "A fresh registry instance did not recover the exact durable registration.");
+}
+
+static async Task FileBackedDurableRegistryRestoresHotCatalogue()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "ServerApp.DurableRegistry." + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var firstStore = new FileBotBuildRegistryStore(directory);
+        using (var registry = await DurableBotBuildRegistry.OpenAsync(firstStore, capacity: 8, pageSize: 64))
+        {
+            var result = await registry.RegisterAsync(
+                new BotBuildReference("bot-file", "build-file", new string('f', 64)),
+                BotBuildEligibilityStatus.Eligible);
+            Assert(result.Committed && registry.Revision == 1 &&
+                   (await registry.FindBuildAsync("bot-file", "build-file")) is not null,
+                "The file-backed registry did not durably commit and publish the initial build.");
+        }
+
+        using var restarted = await DurableBotBuildRegistry.OpenAsync(
+            new FileBotBuildRegistryStore(directory), capacity: 8, pageSize: 64);
+        var recovered = await restarted.FindBuildAsync("bot-file", "build-file");
+        Assert(restarted.Revision == 1 && recovered is not null &&
+               recovered.Build.ContentSha256 == new string('F', 64) &&
+               recovered.Eligibility == BotBuildEligibilityStatus.Eligible,
+            "The DataWarehouse hot catalogue did not rebuild from the file-backed registry after restart.");
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
 }
 
 static async Task DurableRegistryStoreFailureLeavesVisibleState()
