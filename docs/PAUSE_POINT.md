@@ -22,13 +22,14 @@
 - `tests/ServerApp.ContractChecks/Program.cs`: 33 core contract checks cover manifest/provisioning, placement, competition contracts, and 1v1 admission without a DataWarehouse dependency.
 - `tests/ServerApp.DataWarehouse.ContractChecks/`: 13 optional integration checks cover fixed-record catalogue behavior, scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
 
-## Durability boundary — decision still open
+## Durability boundary — database-free file storage
 
-- The coordinator and store contract are implemented, but no concrete durable store has been selected or implemented.
-- The in-memory failure-injection store in contract checks validates coordination semantics only. It does not prove disk durability, crash recovery, atomic filesystem replacement, or database transaction semantics.
-- The next persistence implementation must be chosen explicitly: atomic file-backed snapshots or a database-backed store. Do not silently choose a database product or persistence format.
-- DataWarehouse remains the fast process-local hot catalogue. The host-owned durable store is authoritative; startup validates its snapshot and rebuilds DataWarehouse shelves. Never persist DataHandle values, shelf slot indexes, or native addresses as durable identity.
-- Store implementations must commit atomically against the expected revision, report Committed only after durability, and never throw after a commit has taken effect. A revision conflict requires reload before retry.
+- **Architecture decision: no databases.** ServerApp will not introduce a database engine, database service, ORM, or database dependency for the bot-build registry. Storage is optimized for runtime performance and simple recovery, not minimum disk consumption.
+- The coordinator and host-owned store contract are implemented; a concrete file store remains to be implemented and verified.
+- The intended format is a compact binary, append-oriented journal with checksummed revision records and periodic compact checkpoints. Normal registration/eligibility mutations should append only the changed record rather than rewrite the entire catalogue. Startup loads the latest checkpoint and replays the journal; compaction is an explicit maintenance operation.
+- The in-memory failure-injection store in contract checks validates coordination semantics only. It does not prove disk durability, crash recovery, filesystem locking, torn-write handling, or atomic checkpoint replacement.
+- DataWarehouse remains the fast process-local hot catalogue. The host-owned file store is authoritative; startup validates its checkpoint/journal and rebuilds DataWarehouse shelves. Never persist DataHandle values, shelf slot indexes, or native addresses as durable identity.
+- File-store commits must arbitrate writers, verify the expected store revision, durably flush a complete checksummed journal record before reporting Committed, and never throw after a commit has taken effect. A revision conflict requires reload before retry.
 
 ## Verification and sequencing
 
