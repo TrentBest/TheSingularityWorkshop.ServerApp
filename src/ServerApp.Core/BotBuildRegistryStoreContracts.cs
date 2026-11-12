@@ -3,8 +3,9 @@ namespace ServerApp.Core;
 /// <summary>
 /// Immutable host-owned durable snapshot of the registered bot-build catalogue.
 /// Revision is a store-wide compare-and-swap token, not a DataWarehouse handle or row ID.
-/// SchemaVersion identifies the durable payload shape; stores must migrate older supported
-/// representations before constructing this current domain snapshot.
+/// SchemaVersion identifies the durable payload shape. Callers must provide it explicitly; stores
+/// must reject missing version metadata and migrate older supported representations before
+/// constructing this current domain snapshot.
 /// </summary>
 public sealed class BotBuildRegistrySnapshot
 {
@@ -13,7 +14,7 @@ public sealed class BotBuildRegistrySnapshot
     public BotBuildRegistrySnapshot(
         long revision,
         IEnumerable<RegisteredBotBuild> registrations,
-        int schemaVersion = CurrentSchemaVersion)
+        int schemaVersion)
     {
         if (revision < 0) throw new ArgumentOutOfRangeException(nameof(revision));
         if (schemaVersion != CurrentSchemaVersion)
@@ -40,9 +41,9 @@ public enum BotBuildRegistryCommitResult
 /// <summary>
 /// Host-owned durability boundary. CommitAsync must atomically and durably replace the complete
 /// snapshot iff its current revision equals expectedRevision. It must not report Committed before
-/// the replacement is durable. The store must persist SchemaVersion with the snapshot and migrate
-/// older supported payloads to CurrentSchemaVersion before returning them from LoadAsync. Unknown
-/// future versions fail closed. An implementation must not throw after a commit has taken effect;
+/// the replacement is durable. The store must persist SchemaVersion with the snapshot, reject payloads with missing version
+/// metadata, and migrate older supported payloads to CurrentSchemaVersion before returning them
+/// from LoadAsync. Unknown future versions fail closed. An implementation must not throw after a commit has taken effect;
 /// it must return Committed for that outcome. If a caller receives a revision conflict, it reloads
 /// the authoritative snapshot before retrying. Implementations own file/database/replication policy.
 /// </summary>
