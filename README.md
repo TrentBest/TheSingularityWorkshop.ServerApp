@@ -6,7 +6,7 @@
 [![Sith Policy](assets/sith-policy.svg)](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/workflows/sith-policy.yml)
 **ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
-This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet an implemented server platform. No runnable server, public endpoint, authentication service, scheduler, persistence system, or deployment workflow is claimed here.
+This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet a production server platform. Source-backed local provisioning, host workflow composition, and a durable bot-build registry are implemented as bounded slices. No public endpoint, authentication service, distributed scheduler, or production deployment workflow is claimed here.
 
 This document follows the Workshop's [Documentation Standard](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/master/DOCUMENTATION_STANDARD.md). See [Agent Onboarding](AGENTS.md) before contributing.
 
@@ -50,7 +50,7 @@ The [Competitive Ladder Lab](https://trentbest.github.io/TheSingularityWorkshop.
 
 Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. The default solution includes Core, CLI, MachineReport, and dependency-free Core ContractChecks. The optional DataWarehouse adapter and its integration checks are built separately when that capability is needed.
 
-The default ServerApp solution and core contract checks do not require DataWarehouse. The fixed-record catalogue is an optional integration in its own project and its own contract-check executable. CI checks it from a pinned source checkout, so we can harden the integration without making it a dependency of every ServerApp consumer.
+The default ServerApp solution and core contract checks do not require DataWarehouse or the file store. The fixed-record DataWarehouse catalogue and durable file store are isolated integrations with dedicated contract-check executables. CI checks them explicitly, without making either a dependency of every ServerApp consumer.
 
 To build the dependency-free core:
 
@@ -68,7 +68,7 @@ dotnet build .\src\ServerApp.DataWarehouse\ServerApp.DataWarehouse.csproj --conf
 dotnet run --project .\tests\ServerApp.DataWarehouse.ContractChecks\ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
 ```
 
-The competitive ladder's bot-build registry now has a host-owned atomic snapshot/CAS contract with explicit schema version 1 and a DataWarehouse coordinator that builds a candidate hot catalogue, commits the next durable revision, and only then makes it visible. Host stores must migrate supported older payloads and reject unknown versions. No concrete database or file format is selected yet; the contract checks use an in-memory failure-injection store, so this is not a claim of disk durability. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
+The bot-build registry now has a concrete database-free file store in `src/ServerApp.FileStore`. It appends checksummed binary revision frames containing only changed registrations/removals, arbitrates writers across processes, performs revision compare-and-swap, and flushes before acknowledging a commit. Startup validates a compact checkpoint and replays the journal; an incomplete final frame is treated as a torn tail, while complete corruption and unknown schema versions fail closed. `CompactAsync` installs a full checkpoint before rotating the journal. The DataWarehouse coordinator still commits durable state before publishing its replacement hot catalogue. The store is intentionally outside the default solution and is built/tested explicitly by CI, preserving dependency-free ServerApp Core consumers. Its disk-recovery contract checks are in `tests/ServerApp.FileStore.ContractChecks`; CI execution is the next verification gate, so source implementation must not yet be described as a passing durability proof. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
 
 The Foundry host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
 
