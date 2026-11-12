@@ -363,7 +363,7 @@ sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
     public bool FailNextCommit { get; set; }
 
     public TestBotBuildRegistryStore(BotBuildRegistrySnapshot? initial = null) =>
-        _snapshot = initial ?? new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
+        _snapshot = initial ?? new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>(), BotBuildRegistrySnapshot.CurrentSchemaVersion);
 
     public ValueTask<BotBuildRegistrySnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
