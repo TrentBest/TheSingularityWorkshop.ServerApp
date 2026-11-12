@@ -164,7 +164,9 @@ static async Task DataWarehouseCatalogStoresBuilds()
         $"A valid build could not be registered: {error}");
     var registration = await catalog.FindBuildAsync("bot-a", "build-a");
     Assert(registration is not null &&
-           registration.Build == build with { ContentSha256 = new string('A', 64) } &&
+           registration.Build.BotIdentityId == build.BotIdentityId &&
+           registration.Build.BuildId == build.BuildId &&
+           registration.Build.ContentSha256 == new string('A', 64) &&
            registration.Eligibility == BotBuildEligibilityStatus.Eligible &&
            catalog.RegisteredBuildCount == 1,
         "The DataWarehouse shelf did not preserve the exact build identity, SHA-256, and eligibility.");
