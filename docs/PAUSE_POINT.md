@@ -20,7 +20,7 @@
 - `src/ServerApp.Core/BotBuildRegistryStoreContracts.cs`: immutable domain snapshot and host-owned atomic compare-and-swap store contract. Snapshots carry explicit schema version 1; stores must migrate supported older payloads and reject unknown versions. Revision tokens are store-wide versions, not DataWarehouse handles.
 - `src/ServerApp.DataWarehouse/DurableBotBuildRegistry.cs`: candidate catalogue is built and validated off to the side, the host store commits first, and only then is the replacement hot catalogue made visible. Failed writes and revision conflicts leave the previous catalogue visible; stale instances can call `ReloadAsync`.
 - `tests/ServerApp.ContractChecks/Program.cs`: 33 core contract checks cover manifest/provisioning, placement, competition contracts, and 1v1 admission without a DataWarehouse dependency.
-- `tests/ServerApp.DataWarehouse.ContractChecks/`: 12 optional integration checks cover fixed-record catalogue behavior, scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
+- `tests/ServerApp.DataWarehouse.ContractChecks/`: 13 optional integration checks cover fixed-record catalogue behavior, scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
 
 ## Durability boundary — decision still open
 
@@ -33,7 +33,7 @@
 ## Verification and sequencing
 
 - Earlier evidence remains valid only for its cited revisions: ServerApp CI run [#43184712816](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712816) passed for the earlier DataWarehouse integration revision, and Pages run [#43184712477](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712477) passed for its corresponding revision.
-- The dependency split preserves the 45 authored checks as 33 core checks plus 11 DataWarehouse integration checks. The updated CI workflow now builds/runs the optional integration separately after checking out its pinned source. This revision has not yet been verified by CI; do not describe either suite as passing until CI executes on the relevant commit.
+- The dependency split preserves the 46 authored checks as 33 core checks plus 11 DataWarehouse integration checks. The updated CI workflow now builds/runs the optional integration separately after checking out its pinned source. This revision has not yet been verified by CI; do not describe either suite as passing until CI executes on the relevant commit.
 - Sith policy is a publish/release gate, not a development/execution blocker. Extra branch cleanup remains owner-controlled.
 - PR #3 remains draft, open, unmerged, and contains candidate-scoped composition/lifecycle work not yet on `development`. Do not duplicate that work or merge it without explicit authorization. Issue #7 lifecycle sequencing remains gated on PR #3.
 - Issue #9 tracks durable persistence/recovery: [Persist and recover the DataWarehouse-backed bot-build catalogue](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
