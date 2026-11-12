@@ -38,6 +38,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild),
     ("DataWarehouse catalogue stores and resolves immutable build records", DataWarehouseCatalogStoresBuilds),
     ("DataWarehouse catalogue restores from durable domain snapshots", DataWarehouseCatalogRestoresSnapshot),
+    ("DataWarehouse dirty snapshots acknowledge only unchanged revisions", DataWarehouseCatalogDirtySnapshots),
     ("DataWarehouse catalogue handles thousands of fixed-record builds", DataWarehouseCatalogHandlesLargeBuildSets),
     ("DataWarehouse catalogue serializes concurrent callers", DataWarehouseCatalogSerializesConcurrentCallers),
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
@@ -197,8 +198,58 @@ static async Task DataWarehouseCatalogRestoresSnapshot()
            first?.Eligibility == BotBuildEligibilityStatus.Eligible &&
            second?.Eligibility == BotBuildEligibilityStatus.Suspended &&
            first.Build.ContentSha256 == new string('E', 64) &&
-           second.Build.ContentSha256 == new string('F', 64),
+           second.Build.ContentSha256 == new string('F', 64) &&
+           restored.DirtyBuildCount == 0,
         "The DataWarehouse hot catalogue did not faithfully restore a durable domain snapshot.");
+}
+
+static Task DataWarehouseCatalogDirtySnapshots()
+{
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: 4, pageSize: 64);
+    Assert(catalog.TryRegister(new BotBuildReference("bot-a", "build-a", new string('a', 64)),
+        BotBuildEligibilityStatus.Eligible, out _) &&
+        catalog.TryRegister(new BotBuildReference("bot-b", "build-b", new string('b', 64)),
+            BotBuildEligibilityStatus.PendingReview, out _),
+        "The initial dirty records could not be registered.");
+
+    var initial = catalog.CaptureDirtySnapshot();
+    Assert(initial.Registrations.Count == 2 && catalog.DirtyBuildCount == 2,
+        "The initial dirty snapshot did not include both new records.");
+    catalog.AcknowledgePersisted(initial);
+    Assert(catalog.DirtyBuildCount == 0,
+        "A successfully persisted unchanged snapshot did not clear dirty bits.");
+
+    Assert(catalog.TrySetEligibility("bot-a", "build-a", BotBuildEligibilityStatus.Suspended) &&
+           catalog.DirtyBuildCount == 1,
+        "An eligibility mutation did not mark exactly one record dirty.");
+    var captured = catalog.CaptureDirtySnapshot();
+    Assert(captured.Registrations.Count == 1 &&
+           captured.Registrations[0].Eligibility == BotBuildEligibilityStatus.Suspended,
+        "Incremental dirty capture did not isolate the changed build.");
+
+    Assert(catalog.TrySetEligibility("bot-a", "build-a", BotBuildEligibilityStatus.Eligible),
+        "The in-flight build eligibility could not be updated.");
+    catalog.AcknowledgePersisted(captured);
+    Assert(catalog.DirtyBuildCount == 1,
+        "Acknowledging an older snapshot incorrectly cleared a newer mutation.");
+
+    var latest = catalog.CaptureDirtySnapshot();
+    Assert(latest.Registrations.Single().Eligibility == BotBuildEligibilityStatus.Eligible,
+        "The next dirty snapshot did not contain the latest eligibility.");
+    catalog.AcknowledgePersisted(latest);
+    Assert(catalog.DirtyBuildCount == 0,
+        "The latest successfully persisted revision remained dirty.");
+
+    using var otherCatalog = new DataWarehouseBotBuildCatalog(capacity: 1, pageSize: 64);
+    try
+    {
+        otherCatalog.AcknowledgePersisted(latest);
+        throw new InvalidOperationException("A snapshot from another catalogue was accepted.");
+    }
+    catch (ArgumentException)
+    {
+        return Task.CompletedTask;
+    }
 }
 
 static async Task DataWarehouseCatalogHandlesLargeBuildSets()
