@@ -70,8 +70,10 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
     }
 
     /// <summary>
-    /// Registers one immutable build. Duplicate identity/build pairs and malformed SHA-256
-    /// values are rejected. Eligibility is supplied by the host's review/authorization flow.
+    /// Low-level process-local shelf mutation for tests, snapshot restoration, and explicitly
+    /// ephemeral catalogues. Authoritative host registration must go through DurableBotBuildRegistry
+    /// so the host store commits before the new state becomes visible. Duplicate identity/build
+    /// pairs and malformed SHA-256 values are rejected. Eligibility is supplied by host policy.
     /// </summary>
     public bool TryRegister(
         BotBuildReference build,
@@ -145,7 +147,11 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
         }
     }
 
-    /// <summary>Changes only the mutable eligibility field; build identity and hash stay pinned.</summary>
+    /// <summary>
+    /// Low-level process-local mutation only. Authoritative eligibility changes must go through
+    /// DurableBotBuildRegistry so the host store commits before the new state becomes visible.
+    /// Build identity and hash remain pinned.
+    /// </summary>
     public bool TrySetEligibility(
         string botIdentityId,
         string buildId,
