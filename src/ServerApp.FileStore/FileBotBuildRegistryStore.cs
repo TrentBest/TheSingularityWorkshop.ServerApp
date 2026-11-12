@@ -78,18 +78,28 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
 
         var frame = EncodeJournalFrame(replacement.Revision, upserts, removals);
         cancellationToken.ThrowIfCancellationRequested();
-        await using (var stream = new FileStream(
-            _journalPath, FileMode.Append, FileAccess.Write, FileShare.Read,
-            bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough))
+        var durable = false;
+        try
         {
-            await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
-            // Once the complete frame has been written, do not let caller cancellation interrupt
-            // the durability barrier and leave the commit outcome ambiguous.
-            await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            stream.Flush(flushToDisk: true);
+            await using (var stream = new FileStream(
+                _journalPath, FileMode.Append, FileAccess.Write, FileShare.Read,
+                bufferSize: 64 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+                // Once the complete frame has been written, do not let caller cancellation interrupt
+                // the durability barrier and leave the commit outcome ambiguous.
+                await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                stream.Flush(flushToDisk: true);
+                durable = true;
+            }
+        }
+        catch when (durable)
+        {
+            // The frame crossed the durable flush barrier. Disposal/cleanup failure cannot turn
+            // an already-committed revision into a reported failure.
+            return BotBuildRegistryCommitResult.Committed;
         }
 
-        // Nothing that can fail is performed after the durable flush and before returning.
         return BotBuildRegistryCommitResult.Committed;
     }
 
