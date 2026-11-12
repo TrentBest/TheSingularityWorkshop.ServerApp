@@ -187,8 +187,10 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
         {
             foreach (var registration in snapshot)
             {
-                if (registration is null || registration.Build is null ||
-                    !catalog.TryRegister(registration.Build, registration.Eligibility, out var error))
+                if (registration is null || registration.Build is null)
+                    throw new InvalidDataException("The durable bot-build snapshot contains a null record.");
+
+                if (!catalog.TryRegister(registration.Build, registration.Eligibility, out var error))
                     throw new InvalidDataException(error ?? "The durable bot-build snapshot contains an invalid record.");
             }
             return catalog;
