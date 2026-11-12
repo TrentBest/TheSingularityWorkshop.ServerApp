@@ -893,7 +893,7 @@ static async Task DurableRegistryPersistsEligibility()
 
 sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
 {
-    public BotBuildRegistrySnapshot Snapshot { get; private set; }
+    public BotBuildRegistrySnapshot Snapshot { get; set; }
     public bool FailNextCommit { get; set; }
 
     public TestBotBuildRegistryStore(BotBuildRegistrySnapshot? initial = null) =>
