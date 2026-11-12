@@ -40,21 +40,25 @@ A landing Experience must expose interactable transfer points for Social, Settin
 
 See [Architecture](docs/ARCHITECTURE.md) and [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) for the full model.
 
-## 🟢 04 — Fleet Observatory
+## 🟢 04 — Fleet and Competitive Ladder Labs
 
-Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/). Experiment with host counts, CPU and memory budgets, workload profiles, and first-fit placement. The browser simulation is illustrative; the linked source and CI runs provide the implementation evidence. It does not connect to or provision real hosts.
+Enter the interactive [ServerApp Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/). Experiment with host counts, CPU and memory budgets, workload profiles, and first-fit placement. The browser simulation is illustrative; it does not connect to or provision real hosts.
+
+The [Competitive Ladder Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/competitive-ladder/) demonstrates the StarCraft II competition model: formats, creator-owned bot identities, immutable builds, and 1v1 admission. It is a static simulation, not a live ladder or game-session host. The current source-backed implementation and CI evidence are documented in [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md).
 
 ## 🟦 Open the repository in Visual Studio
 
-Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. This solution includes the standalone Core, CLI, MachineReport, and Core ContractChecks projects, so it opens as a normal Visual Studio solution without requiring the neighboring Workshop repositories first.
+Open `ServerApp.sln` from the repository root in Visual Studio Community 2026. The solution includes Core, CLI, MachineReport, the DataWarehouse integration, and Core ContractChecks.
 
-The Foundry host integration and its contract checks remain source-integrated projects that require the pinned repositories under `_deps`; CI checks those separately. They are intentionally not part of this standalone solution yet, so a fresh clone can open and build the useful local projects immediately.
-
-You can also build the solution from a Developer PowerShell or terminal:
+The DataWarehouse integration intentionally builds against the repository's active source rather than a published NuGet package. Check out its pinned source before building the full solution:
 
 ```powershell
+git clone https://github.com/TrentBest/TheSingularityWorkshop.DataWarehouse.git _deps/TheSingularityWorkshop.DataWarehouse
+git -C _deps/TheSingularityWorkshop.DataWarehouse checkout a019d006dbb2eb4cb525cd3977c9eafaf6eee616
 dotnet build .\ServerApp.sln --configuration Release
 ```
+
+The Foundry host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
 
 ## 🟢 05 — Inspect a deployment machine
 
@@ -75,7 +79,7 @@ dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnost
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-To build and run the composed Foundry/FSM_COS integration checks, first place the five source repositories at the exact revisions used by CI:
+To build and run the composed Foundry/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
 
 ```bash
 git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
