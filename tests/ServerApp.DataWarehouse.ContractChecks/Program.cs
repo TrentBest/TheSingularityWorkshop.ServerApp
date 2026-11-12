@@ -262,7 +262,7 @@ static async Task DurableRegistryPersistsEligibility()
         new RegisteredBotBuild(
             new BotBuildReference("bot-a", "build-a", new string('c', 64)),
             BotBuildEligibilityStatus.PendingReview)
-    ]));
+    ], BotBuildRegistrySnapshot.CurrentSchemaVersion));
     using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
     var result = await registry.SetEligibilityAsync("bot-a", "build-a", BotBuildEligibilityStatus.Eligible);
     var visible = await registry.FindBuildAsync("bot-a", "build-a");
@@ -320,7 +320,7 @@ static Task DurableRegistryRejectsUnknownSchemaVersion()
     }
     catch (NotSupportedException)
     {
-        var current = new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
+        var current = new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>(), BotBuildRegistrySnapshot.CurrentSchemaVersion);
         Assert(current.SchemaVersion == BotBuildRegistrySnapshot.CurrentSchemaVersion,
             "A current snapshot did not expose its explicit schema version.");
         return Task.CompletedTask;
@@ -331,7 +331,7 @@ static async Task DurableRegistryRejectsStaleRevision()
 {
     var store = new TestBotBuildRegistryStore();
     using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
-    store.Snapshot = new BotBuildRegistrySnapshot(1, Array.Empty<RegisteredBotBuild>());
+    store.Snapshot = new BotBuildRegistrySnapshot(1, Array.Empty<RegisteredBotBuild>(), BotBuildRegistrySnapshot.CurrentSchemaVersion);
     var result = await registry.RegisterAsync(
         new BotBuildReference("bot-a", "build-a", new string('d', 64)),
         BotBuildEligibilityStatus.Eligible);
