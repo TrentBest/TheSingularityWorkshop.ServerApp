@@ -46,7 +46,7 @@ public enum BotBuildRegistryCommitResult
 /// CurrentSchemaVersion before returning them from LoadAsync. Unknown future versions fail closed.
 /// An implementation must not throw after a commit has taken effect;
 /// it must return Committed for that outcome. If a caller receives a revision conflict, it reloads
-/// the authoritative snapshot before retrying. Implementations own file/database/replication policy.
+/// the authoritative snapshot before retrying. Implementations own the file format, append/checkpoint policy, filesystem locking, and durability policy. The intended ServerApp implementation is a database-free binary journal with periodic compact checkpoints; DataWarehouse remains the hot in-memory catalogue.
 /// </summary>
 public interface IBotBuildRegistryStore
 {
