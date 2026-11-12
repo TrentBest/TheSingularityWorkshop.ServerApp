@@ -3,48 +3,57 @@
 
 # ServerApp Pause Point
 
-## Current checkpoint — 2026-11-01
+## Current checkpoint — 2026-11-12
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
-- Active branch: `development`; `master` remains the starting baseline.
-- Current stage: local manifest/placement proofs and a source-pinned Foundry → FSM_COS → role-adapter workflow are source-implemented. The composed workflow has deterministic in-memory contract fixtures; trusted repository artifact delivery and a production server role host remain incomplete.
-- Product direction: manifest-driven provisioning of distinct server roles, including landing hosts, platform services, persistent Workshop domains, authentication and client I/O roles, Experience compute, and rendering.
-- Required landing destinations: Social, Settings, Hangouts, Exit, Domains, and Workshop. These must be clearly denoted interactables; visual themes may vary.
-- Performance hypotheses: rapid manifest-to-ready activation and an early 30% computational/energy savings estimate are goals/hypotheses, not verified claims.
-- No NuGet publication, production deployment, or public endpoint exposure is authorized by this checkpoint.
+- Active work branch: `development`; `master` remains the released/stable baseline.
+- Branch inventory last inspected: `development`, `master`, and the pre-existing `work/candidate-scoped-composition-sessions` branch. The owner controls branch deletion.
+- Current workstream: StarCraft II competitive ladder hosting, with DataWarehouse deliberately adopted as the hot in-memory catalogue technology to showcase and harden it.
+- ServerApp owns hosting/competition operations; SingularityBot remains independent player intelligence. FSM_COS composes approved MicroBundles, FSM_Foundry executes host-authored workflows, and FSM_API remains the state/context/process-group primitive.
+- No NuGet publication, merge to `master`, external release, production deployment, public ladder endpoint exposure, or branch deletion is authorized by this checkpoint.
 
-## Current implementation evidence
+## Competitive ladder implementation
 
-- `src/ServerApp.Core`: version-1 server-role manifest, validator, explicit role-adapter contract, local provisioning coordinator.
-- `src/ServerApp.Cli`: local CLI with a non-networked `diagnostic.ready` adapter.
-- `examples/diagnostic-ready.serverapp.json`: sample manifest.
-- `tests/ServerApp.ContractChecks`: dependency-free Core contract checks.
-- `src/ServerApp.FoundryHost/FoundryProvisioningHost.cs`: Core-only Foundry workflow fixture; `FoundryComposedProvisioningHost.cs` runs validate → FSM_COS compose → role activation through the actual Foundry coordinator.
-- `src/ServerApp.FoundryHost/ServerRoleRuntimeComposition.cs`: host-owned role-to-approved-root catalog, process-local runtime IDs, FSM_COS `RuntimeExperienceHost` composition handoff, and `IServerRoleRuntimeAdapter` contract.
-- `tests/ServerApp.FoundryHost.ContractChecks`: checks Foundry lifecycle/cancellation plus FSM_COS dependency-first composition, assembly handoff, composition failure blocking activation, and role readiness gating.
-- `.github/workflows/ci.yml`: checks out Foundry, FSM_COS, FSM_API, FSM_UserIO, and MicroBundleDomain at exact commits; builds with `WorkshopUseRepositorySources=true` and runs both contract-check executables.
-- Verification status: the first full-source CI run found a MicroBundleDomain sibling-directory naming mismatch. CI checkout path has been corrected; the latest exact workflow run still needs confirmation.
+- `src/ServerApp.Core/CompetitionContracts.cs`: competition definitions, match formats, immutable bot-build references, match participant assignments, and fail-closed assignment validation. Initial topology vocabulary includes 1v1, 2v2, FFA, 3v3, 4v4, and 2v2v2.
+- `src/ServerApp.Core/MatchAdmissionService.cs`: host-independent 1v1 admission resolves exact bot identity + immutable build ID, accepts only Eligible builds, and snapshots the selected build identities before launch. It does not queue, launch, or rate matches.
+- `src/ServerApp.DataWarehouse/DataWarehouseBotBuildCatalog.cs`: DataWarehouse-backed fixed-record hot catalogue. Shelf access is serialized at the adapter boundary; handles/native addresses do not escape; dirty snapshots and revision-safe acknowledgements are supported. This is process-local hot storage, not durability.
+- `src/ServerApp.Core/BotBuildRegistryStoreContracts.cs`: immutable domain snapshot and host-owned atomic compare-and-swap store contract. Revision tokens are store-wide versions, not DataWarehouse handles.
+- `src/ServerApp.DataWarehouse/DurableBotBuildRegistry.cs`: candidate catalogue is built and validated off to the side, the host store commits first, and only then is the replacement hot catalogue made visible. Failed writes and revision conflicts leave the previous catalogue visible; stale instances can call `ReloadAsync`.
+- `tests/ServerApp.ContractChecks/Program.cs`: 44 contract checks are currently authored, including admission, DataWarehouse scale/concurrency, durable-first visibility, restart reconstruction from a store snapshot, write failure, eligibility persistence, and stale-revision recovery.
+
+## Durability boundary — decision still open
+
+- The coordinator and store contract are implemented, but no concrete durable store has been selected or implemented.
+- The in-memory failure-injection store in contract checks validates coordination semantics only. It does not prove disk durability, crash recovery, atomic filesystem replacement, or database transaction semantics.
+- The next persistence implementation must be chosen explicitly: atomic file-backed snapshots or a database-backed store. Do not silently choose a database product or persistence format.
+- DataWarehouse remains the fast process-local hot catalogue. The host-owned durable store is authoritative; startup validates its snapshot and rebuilds DataWarehouse shelves. Never persist DataHandle values, shelf slot indexes, or native addresses as durable identity.
+- Store implementations must commit atomically against the expected revision, report Committed only after durability, and never throw after a commit has taken effect. A revision conflict requires reload before retry.
+
+## Verification and sequencing
+
+- Earlier evidence remains valid only for its cited revisions: ServerApp CI run [#43184712816](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712816) passed for the earlier DataWarehouse integration revision, and Pages run [#43184712477](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/43184712477) passed for its corresponding revision.
+- The newer durable-first coordinator and its 44-check suite have not yet been verified by a CI run. Do not describe those checks as passing until CI executes them on the relevant commit.
+- Sith policy is a publish/release gate, not a development/execution blocker. Extra branch cleanup remains owner-controlled.
+- PR #3 remains draft, open, unmerged, and contains candidate-scoped composition/lifecycle work not yet on `development`. Do not duplicate that work or merge it without explicit authorization. Issue #7 lifecycle sequencing remains gated on PR #3.
+- Issue #9 tracks durable persistence/recovery: [Persist and recover the DataWarehouse-backed bot-build catalogue](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
 
 ## Resume sequence
 
-1. Read [Agent Onboarding](../AGENTS.md), [Architecture](ARCHITECTURE.md), and [Founding Fleet Notes](SERVER_FLEET_MODEL.md).
-2. Follow the five-repository pinned source checkout instructions in [Foundry Integration](FOUNDRY_INTEGRATION.md) and build/run the composed host contract checks.
-3. Keep the passing pinned-source CI path intact; any integration change must retain exact-SHA build and contract-check evidence.
-4. Replace the in-memory MicroBundle catalog with a trusted repository-backed artifact resolver that separately proves retrieval, hash verification, and materialization.
-5. Implement the first real server-role adapter, including an explicit stop/drain/cleanup contract rather than assuming FSM_COS unloads bundles.
-6. Add readiness/health contracts and idempotent instance reconciliation.
-7. Treat authentication, client gateway, distributed placement, persistent-world handoff, and Renderer delta delivery as separate vertical slices.
-8. Benchmark request-to-ready latency and compute/network/energy outcomes before making performance claims.
+1. Preserve direct development-branch work; inspect current source, tests, docs, workflows, and commit evidence before each implementation slice.
+2. Resolve the persistence choice with the owner, then implement a concrete store behind `IBotBuildRegistryStore` without moving durability into DataWarehouse.
+3. Verify schema versioning, corruption handling, duplicates, interrupted writes, atomic replacement/transaction behavior, compare-and-swap concurrency, restart recovery, and failure injection.
+4. Run the complete ServerApp CI and contract-check suite against the resulting revision; distinguish source implementation from verified behavior.
+5. Continue the 1v1 vertical slice only after the store/recovery boundary is proven, then add the SC2 game-session adapter and authoritative result intake.
+6. Keep 2v2, FFA, 3v3, 4v4, ratings, and multi-host operation staged behind real 1v1 evidence.
 
-## Known constraints
+## Platform invariants
 
-- FSM_COS owns composition; FSM_API provides state/context/process-group primitives.
-- AnyApp and WebApp are independent host manifestations.
-- ServerApp provisions and operates server roles; it does not duplicate FSM_COS, invent a second semantic clock, or collapse all roles into one backend.
-- Validate manifests, artifact provenance, authorization, resource limits, and all client input.
-- Preserve BundleId + Version + ContentHash identity and separate retrieval, verification, materialization, composition, and execution evidence.
-- The owner controls branch deletion, release operations, NuGet publication, and production deployment.
+- FSM_COS owns composition; FSM_API provides state/context/process-group primitives; FSM_Foundry owns host workflow execution/lifecycle.
+- ServerApp provisions and operates server roles and composed applications; it does not become a second FSM_COS or absorb SingularityBot strategy.
+- Preserve exact bot build identity and SHA-256 content provenance through admission and match records.
+- The game-session host/adapter—not a bot's own claim—is the authoritative source of terminal match evidence.
+- Do not claim persistence, matchmaking, SC2 hosting, authoritative results, rating calculations, horizontal scaling, or live ladder availability until implemented and tested.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
-<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
