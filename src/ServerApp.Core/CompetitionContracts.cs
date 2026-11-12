@@ -144,8 +144,9 @@ public static class CompetitionContractValidator
         MatchAssignment? assignment)
     {
         var errors = new List<CompetitionContractError>();
-        errors.AddRange(ValidateDefinition(definition));
-        if (assignment is null)
+        var definitionErrors = ValidateDefinition(definition);
+        errors.AddRange(definitionErrors);
+        if (definitionErrors.Count > 0 || assignment is null)
         {
             errors.Add(new("match.assignment.required", "A match assignment is required."));
             return errors;
@@ -200,7 +201,8 @@ public static class CompetitionContractValidator
                 errors.Add(new("match.bot-identity.unique", "Bot identity IDs must be non-empty and unique within a match."));
             Require(participant.BotBuild.BuildId, "match.bot-build.id", "BuildId", errors);
             var hash = participant.BotBuild.ContentSha256;
-            if (hash.Length != 64 || hash.Any(character => !Uri.IsHexDigit(character)))
+            if (string.IsNullOrEmpty(hash) || hash.Length != 64 ||
+                hash.Any(character => !Uri.IsHexDigit(character)))
                 errors.Add(new("match.bot-build.hash", "Every bot build must pin a 64-character hexadecimal SHA-256 content hash."));
         }
 
