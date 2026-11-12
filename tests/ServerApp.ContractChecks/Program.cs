@@ -38,6 +38,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild),
     ("DataWarehouse catalogue stores and resolves immutable build records", DataWarehouseCatalogStoresBuilds),
     ("DataWarehouse catalogue restores from durable domain snapshots", DataWarehouseCatalogRestoresSnapshot),
+    ("DataWarehouse catalogue handles thousands of fixed-record builds", DataWarehouseCatalogHandlesLargeBuildSets),
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
     ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration)
 };
@@ -197,6 +198,29 @@ static async Task DataWarehouseCatalogRestoresSnapshot()
            first.Build.ContentSha256 == new string('E', 64) &&
            second.Build.ContentSha256 == new string('F', 64),
         "The DataWarehouse hot catalogue did not faithfully restore a durable domain snapshot.");
+}
+
+static async Task DataWarehouseCatalogHandlesLargeBuildSets()
+{
+    const int count = 4096;
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: count);
+    for (var i = 0; i < count; i++)
+    {
+        var build = new BotBuildReference(
+            $"bot-{i:D5}",
+            $"build-{i:D5}",
+            new string((char)('a' + (i % 6)), 64));
+        Assert(catalog.TryRegister(build, BotBuildEligibilityStatus.Eligible, out var error),
+            $"Build {i} failed to register: {error}");
+    }
+
+    var first = await catalog.FindBuildAsync("bot-00000", "build-00000");
+    var last = await catalog.FindBuildAsync("bot-04095", "build-04095");
+    Assert(catalog.RegisteredBuildCount == count &&
+           first?.Build.ContentSha256 == new string('A', 64) &&
+           last?.Build.ContentSha256 == new string('D', 64) &&
+           catalog.CreateSnapshot().Count == count,
+        "The fixed-record catalogue lost or corrupted records under a multi-thousand-build workload.");
 }
 
 static async Task DataWarehouseCatalogUpdatesEligibility()
