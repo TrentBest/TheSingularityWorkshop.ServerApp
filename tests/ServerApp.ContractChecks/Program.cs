@@ -24,7 +24,12 @@ var checks = new (string Name, Func<Task> Run)[]
     ("host placement rejects duplicate host identifiers", HostPlacementRejectsDuplicateHosts),
     ("host placement rejects invalid host snapshots", HostPlacementRejectsInvalidHosts),
     ("host placement continues independent instances when one cannot fit", HostPlacementContinuesIndependentInstances),
-    ("host placement skips dependents when a dependency cannot be placed", HostPlacementSkipsUnplacedDependents)
+    ("host placement skips dependents when a dependency cannot be placed", HostPlacementSkipsUnplacedDependents),
+    ("competition exposes the intended team topologies", CompetitionExposesTeamTopologies),
+    ("match assignment pins immutable participant builds", MatchAssignmentPinsBuilds),
+    ("match assignment rejects unsupported topology", MatchAssignmentRejectsUnsupportedTopology),
+    ("match assignment rejects duplicate bot identities and invalid hashes", MatchAssignmentRejectsDuplicateBotsAndInvalidHashes),
+    ("match assignment snapshots participant collection", MatchAssignmentSnapshotsParticipants)
 };
 
 var failures = new List<string>();
@@ -84,6 +89,107 @@ static Task UnknownJsonPropertyIsRejected()
         return Task.CompletedTask;
     }
 }
+
+static Task CompetitionExposesTeamTopologies()
+{
+    var competition = new CompetitionDefinition(
+        "sc2-ranked",
+        "starcraft-ii",
+        "ladder-standard",
+        "1.0.0",
+        [
+            new CompetitionMatchFormat("1v1", [1, 1]),
+            new CompetitionMatchFormat("2v2", [2, 2]),
+            new CompetitionMatchFormat("ffa", [1, 1, 1, 1]),
+            new CompetitionMatchFormat("3v3", [3, 3]),
+            new CompetitionMatchFormat("4v4", [4, 4]),
+            new CompetitionMatchFormat("2v2v2", [2, 2, 2])
+        ]);
+    var errors = CompetitionContractValidator.ValidateDefinition(competition);
+    Assert(errors.Count == 0 && competition.Formats.Count == 6 &&
+           competition.Formats.Single(x => x.FormatId == "2v2v2").ParticipantCount == 6,
+        $"Expected all six declared team topologies to validate: {string.Join("; ", errors.Select(x => x.Message))}");
+    return Task.CompletedTask;
+}
+
+static Task MatchAssignmentPinsBuilds()
+{
+    var competition = TestCompetition();
+    var assignment = TestAssignment();
+    var errors = CompetitionContractValidator.ValidateAssignment(competition, assignment);
+    Assert(errors.Count == 0 && assignment.Participants.Count == 2 &&
+           assignment.Participants.All(x => x.BotBuild.ContentSha256.Length == 64),
+        $"A valid 1v1 assignment was rejected: {string.Join("; ", errors.Select(x => x.Message))}");
+    return Task.CompletedTask;
+}
+
+static Task MatchAssignmentRejectsUnsupportedTopology()
+{
+    var competition = TestCompetition();
+    var assignment = WithFormat(TestAssignment(), "2v2");
+    var errors = CompetitionContractValidator.ValidateAssignment(competition, assignment);
+    Assert(errors.Any(x => x.Code == "match.format.unsupported"),
+        "An assignment selected a format not declared by its competition.");
+    return Task.CompletedTask;
+}
+
+static Task MatchAssignmentRejectsDuplicateBotsAndInvalidHashes()
+{
+    var competition = TestCompetition();
+    var assignment = new MatchAssignment(
+        "match-02", "sc2-ranked", "starcraft-ii", "ladder-standard", "1.0.0",
+        "1v1", "sc2-adapter-1.0.0", DateTimeOffset.UtcNow,
+        [
+            new MatchParticipantAssignment("p1", "A", new BotBuildReference("same-bot", "build-a", new string('a', 64))),
+            new MatchParticipantAssignment("p2", "B", new BotBuildReference("same-bot", "build-b", "not-a-sha256"))
+        ]);
+    var errors = CompetitionContractValidator.ValidateAssignment(competition, assignment);
+    Assert(errors.Any(x => x.Code == "match.bot-identity.unique") &&
+           errors.Any(x => x.Code == "match.bot-build.hash"),
+        "Duplicate bot identity or malformed content hash was accepted.");
+    return Task.CompletedTask;
+}
+
+static Task MatchAssignmentSnapshotsParticipants()
+{
+    var participants = new List<MatchParticipantAssignment>
+    {
+        new("p1", "A", new BotBuildReference("bot-a", "build-a", new string('a', 64))),
+        new("p2", "B", new BotBuildReference("bot-b", "build-b", new string('b', 64)))
+    };
+    var assignment = new MatchAssignment(
+        "match-03", "sc2-ranked", "starcraft-ii", "ladder-standard", "1.0.0",
+        "1v1", "sc2-adapter-1.0.0", DateTimeOffset.UtcNow, participants);
+    participants.Clear();
+    Assert(assignment.Participants.Count == 2,
+        "The assignment retained a mutable caller-owned participant collection.");
+    try
+    {
+        ((IList<MatchParticipantAssignment>)assignment.Participants).Clear();
+        throw new InvalidOperationException("The exposed participant snapshot was mutable.");
+    }
+    catch (NotSupportedException)
+    {
+        return Task.CompletedTask;
+    }
+}
+
+static CompetitionDefinition TestCompetition() => new(
+    "sc2-ranked", "starcraft-ii", "ladder-standard", "1.0.0",
+    [new CompetitionMatchFormat("1v1", [1, 1])]);
+
+static MatchAssignment TestAssignment() => new(
+    "match-01", "sc2-ranked", "starcraft-ii", "ladder-standard", "1.0.0",
+    "1v1", "sc2-adapter-1.0.0", DateTimeOffset.UtcNow,
+    [
+        new MatchParticipantAssignment("p1", "A", new BotBuildReference("bot-a", "build-a", new string('a', 64))),
+        new MatchParticipantAssignment("p2", "B", new BotBuildReference("bot-b", "build-b", new string('b', 64)))
+    ]);
+
+static MatchAssignment WithFormat(MatchAssignment assignment, string formatId) => new(
+    assignment.MatchId, assignment.CompetitionId, assignment.GameId, assignment.RulesetId,
+    assignment.RulesetVersion, formatId, assignment.GameAdapterVersion, assignment.AssignedAtUtc,
+    assignment.Participants);
 
 static ServerRoleManifest ValidManifest() => new()
 {
