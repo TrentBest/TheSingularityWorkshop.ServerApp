@@ -1,17 +1,5 @@
 namespace ServerApp.Core;
 
-/// <summary>
-/// Host-owned lookup boundary for registered bot builds. Implementations must return a build
-/// only when its identity is registered and the build is currently eligible for competition.
-/// Null deliberately does not distinguish unknown identities from ineligible builds.
-/// </summary>
-public interface IEligibleBotBuildCatalog
-{
-    ValueTask<BotBuildReference?> FindEligibleBuildAsync(
-        string botIdentityId,
-        CancellationToken cancellationToken = default);
-}
-
 /// <summary>A participant request before its immutable build has been resolved.</summary>
 public sealed record MatchAdmissionParticipant(
     string ParticipantId,
