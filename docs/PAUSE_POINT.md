@@ -25,9 +25,9 @@
 ## Durability boundary — database-free file storage
 
 - **Architecture decision: no databases.** ServerApp will not introduce a database engine, database service, ORM, or database dependency for the bot-build registry. Storage is optimized for runtime performance and simple recovery, not minimum disk consumption.
-- The coordinator and host-owned store contract are implemented; a concrete file store remains to be implemented and verified.
-- The intended format is a compact binary, append-oriented journal with checksummed revision records and periodic compact checkpoints. Normal registration/eligibility mutations should append only the changed record rather than rewrite the entire catalogue. Startup loads the latest checkpoint and replays the journal; compaction is an explicit maintenance operation.
-- The in-memory failure-injection store in contract checks validates coordination semantics only. It does not prove disk durability, crash recovery, filesystem locking, torn-write handling, or atomic checkpoint replacement.
+- `src/ServerApp.FileStore/FileBotBuildRegistryStore.cs` now implements the concrete host-owned file store behind `IBotBuildRegistryStore`, with no database or third-party package dependency. Each revision is a checksummed binary journal frame containing only changed registrations and removals. Writer arbitration uses an exclusive lock file; expected revision is checked after acquiring the lock; a complete frame is flushed before `Committed` is returned.
+- `LoadAsync` validates the checkpoint and every complete journal frame, replays strictly sequential revisions, truncates only an incomplete final frame, and fails closed on complete bad framing/checksum or unsupported schema. `CompactAsync` writes and flushes a full checkpoint, atomically installs it, then truncates the journal; replay safely skips old journal frames if a crash occurs between checkpoint installation and journal truncation.
+- `tests/ServerApp.FileStore.ContractChecks/` adds seven disk-backed checks for restart, deltas/removals, competing instances, torn tails, corruption, compaction, and schema rejection. CI now builds and runs this project explicitly. The new suite has not yet run on GitHub Actions, so implementation is not yet a verified durability proof.
 - DataWarehouse remains the fast process-local hot catalogue. The host-owned file store is authoritative; startup validates its checkpoint/journal and rebuilds DataWarehouse shelves. Never persist DataHandle values, shelf slot indexes, or native addresses as durable identity.
 - File-store commits must arbitrate writers, verify the expected store revision, durably flush a complete checksummed journal record before reporting Committed, and never throw after a commit has taken effect. A revision conflict requires reload before retry.
 
@@ -43,11 +43,11 @@
 
 1. Preserve direct development-branch work; inspect current source, tests, docs, workflows, and commit evidence before each implementation slice.
 2. Keep the core host and its contract checks dependency-free. Build and verify DataWarehouse only through its explicit integration project and dedicated checks.
-3. Implement the concrete database-free file store behind `IBotBuildRegistryStore`; the architecture decision is settled. Keep it in an isolated host-storage project so the default ServerApp solution and DataWarehouse remain independently consumable.
-4. Use framed binary journal records with explicit schema/revision metadata and checksums; serialize cross-process writers, compare the authoritative revision under that lock, and durably flush before returning `Committed`. Recover an incomplete final frame as a torn tail, but fail closed on a complete frame with invalid framing/checksum or unsupported schema. Add compact checkpoints and safe journal rotation only after append/replay semantics are proven.
-5. Verify restart recovery, interrupted writes, corruption, duplicate keys, capacity, multi-instance/process CAS, checkpoint replacement, and failure injection. The current domain contract rejects unknown schema versions; it does not itself migrate serialized files.
-6. Run the complete ServerApp CI and all contract-check suites against the resulting revision; distinguish source implementation from verified behavior.
-7. Continue the 1v1 vertical slice only after the store/recovery boundary is proven, then add the SC2 game-session adapter and authoritative result intake.
+3. Run the new file-store contract suite in CI; fix compile/runtime failures before layering more behavior on top. Add failure-injection coverage for append interruption and checkpoint replacement, plus malformed/duplicate snapshot payloads and cross-process locking where the CI environment permits.
+4. Review durability semantics on Windows and Linux, especially exclusive lock behavior, flush guarantees, and atomic checkpoint replacement. Do not claim stronger filesystem guarantees than the runtime/platform actually provides.
+5. Integrate `FileBotBuildRegistryStore` into the ServerApp host configuration path so the configured server role opens the authoritative registry and rebuilds DataWarehouse before accepting registrations/admissions. Keep storage path and capacity in trusted host configuration, not client input.
+6. Move StarCraft II-specific ladder composition into a separate experience/application repository, delivered as versioned MicroBundles selected by a ServerApp role manifest. ServerApp keeps generic competition hosting, registry, lifecycle, and result contracts; it does not own SC2 rules or bot strategy.
+7. Continue the 1v1 vertical slice only after the store/recovery boundary and host integration are proven, then add SC2 game-session supervision and authoritative result intake.
 8. Keep 2v2, FFA, 3v3, 4v4, ratings, and multi-host operation staged behind real 1v1 evidence.
 
 ## Platform invariants
@@ -56,7 +56,7 @@
 - ServerApp provisions and operates server roles and composed applications; it does not become a second FSM_COS or absorb SingularityBot strategy.
 - Preserve exact bot build identity and SHA-256 content provenance through admission and match records.
 - The game-session host/adapter—not a bot's own claim—is the authoritative source of terminal match evidence.
-- Do not claim persistence, matchmaking, SC2 hosting, authoritative results, rating calculations, horizontal scaling, or live ladder availability until implemented and tested.
+- The bot-build registry now has a source implementation of file persistence; do not claim production durability until the new disk-backed checks pass and host startup/registration are wired to this store. Do not claim matchmaking, SC2 hosting, authoritative results, rating calculations, horizontal scaling, or live ladder availability until implemented and tested.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
