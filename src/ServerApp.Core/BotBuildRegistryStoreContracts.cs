@@ -41,9 +41,10 @@ public enum BotBuildRegistryCommitResult
 /// <summary>
 /// Host-owned durability boundary. CommitAsync must atomically and durably replace the complete
 /// snapshot iff its current revision equals expectedRevision. It must not report Committed before
-/// the replacement is durable. The store must persist SchemaVersion with the snapshot, reject payloads with missing version
-/// metadata, and migrate older supported payloads to CurrentSchemaVersion before returning them
-/// from LoadAsync. Unknown future versions fail closed. An implementation must not throw after a commit has taken effect;
+/// the replacement is durable. The store must persist SchemaVersion with the snapshot, reject
+/// payloads with missing version metadata, and migrate older supported payloads to
+/// CurrentSchemaVersion before returning them from LoadAsync. Unknown future versions fail closed.
+/// An implementation must not throw after a commit has taken effect;
 /// it must return Committed for that outcome. If a caller receives a revision conflict, it reloads
 /// the authoritative snapshot before retrying. Implementations own file/database/replication policy.
 /// </summary>
