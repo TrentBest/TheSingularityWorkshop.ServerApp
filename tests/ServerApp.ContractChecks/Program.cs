@@ -45,7 +45,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration),
     ("durable registry commits before publishing and recovers after restart", DurableRegistryCommitsBeforePublishingAndRecovers),
     ("durable registry leaves visible state unchanged after store failure", DurableRegistryStoreFailureLeavesVisibleState),
-    ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility)
+    ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility),
+    ("durable registry fails closed on a stale store revision", DurableRegistryRejectsStaleRevision)
 };
 
 var failures = new List<string>();
@@ -847,8 +848,8 @@ static async Task DurableRegistryCommitsBeforePublishingAndRecovers()
 
     using var restarted = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
     var recovered = await restarted.FindBuildAsync("bot-a", "build-a");
-    Assert(restarted.Revision == 1 &&
-           recovered?.Build.ContentSha256 == new string('A', 64) &&
+    Assert(restarted.Revision == 1 && recovered is not null &&
+           recovered.Build.ContentSha256 == new string('A', 64) &&
            recovered.Eligibility == BotBuildEligibilityStatus.Eligible,
         "A fresh registry instance did not recover the exact durable registration.");
 }
@@ -922,4 +923,19 @@ sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
         Snapshot = replacement;
         return ValueTask.FromResult(BotBuildRegistryCommitResult.Committed);
     }
+}
+
+static async Task DurableRegistryRejectsStaleRevision()
+{
+    var store = new TestBotBuildRegistryStore();
+    using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    store.Snapshot = new BotBuildRegistrySnapshot(1, Array.Empty<RegisteredBotBuild>());
+    var result = await registry.RegisterAsync(
+        new BotBuildReference("bot-a", "build-a", new string('d', 64)),
+        BotBuildEligibilityStatus.Eligible);
+    var visible = await registry.FindBuildAsync("bot-a", "build-a");
+    Assert(!result.Committed && result.Error is not null &&
+           registry.Revision == 0 && visible is null &&
+           store.Snapshot.Revision == 1 && store.Snapshot.Registrations.Count == 0,
+        "A stale registry instance published a mutation after its compare-and-swap was rejected.");
 }
