@@ -178,13 +178,13 @@ public sealed class DataWarehouseBotBuildCatalog : IRegisteredBotBuildCatalog, I
         {
             ThrowIfDisposed();
             var snapshot = new List<RegisteredBotBuild>(_index.Count);
+            Span<byte> hash = stackalloc byte[32];
             foreach (var entry in _index.OrderBy(item => item.Key.BotIdentityId, StringComparer.Ordinal)
                          .ThenBy(item => item.Key.BuildId, StringComparer.Ordinal))
             {
                 if (!_builds.IsAlive(entry.Value))
                     continue;
                 ref readonly var slot = ref _builds.Read(entry.Value);
-                Span<byte> hash = stackalloc byte[32];
                 BinaryPrimitives.WriteUInt64LittleEndian(hash[..8], slot.Hash0);
                 BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(8, 8), slot.Hash1);
                 BinaryPrimitives.WriteUInt64LittleEndian(hash.Slice(16, 8), slot.Hash2);
