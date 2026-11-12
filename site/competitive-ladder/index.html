@@ -26,7 +26,7 @@
 <aside class="panel"><h3>Match definition</h3><p class="sub">The format is data. The same platform can host different rulesets.</p>
 <div class="field"><label for="mode">Match mode</label><select id="mode"><option value="1v1">1v1 · Duel</option><option value="2v2">2v2 · Teams</option><option value="ffa">Free-for-all · 4 players</option><option value="3v3">3v3 · Teams</option><option value="4v4">4v4 · Teams</option></select></div>
 <div class="field"><label for="game">External game integration</label><select id="game"><option>StarCraft II (demonstration adapter)</option><option>Another game adapter (future)</option><option>Custom simulation (future)</option></select></div>
-<div class="field"><label>Creator cooperation</label><div class="toggle-row"><button class="toggle" id="mix" aria-pressed="true" type="button">Mixed creators allowed</button><button class="toggle" id="same" aria-pressed="false" type="button">Single creator teams</button></div></div>
+<div class="field"><label>Creator cooperation</label><div class="toggle-row"><button class="toggle" id="mix" aria-pressed="true" type="button">Mixed creators allowed</button><button class="toggle" id="same" aria-pressed="false" type="button">Single creator per team</button></div></div>
 <div class="field"><label for="versions">Bot build policy</label><select id="versions"><option value="pinned">Pin exact bot builds per match</option><option value="latest">Resolve latest eligible build at admission</option></select></div>
 <div class="sim-actions"><button id="compose" type="button">Compose match plan</button><button class="ghost" id="reset" type="button">Reset</button></div>
 <div class="result" id="result" aria-live="polite"><strong>Ready to compose.</strong><br>Select a format and inspect the roster.</div>
@@ -66,10 +66,10 @@ const $=id=>document.getElementById(id);
 const configs={ "1v1":{count:2,teams:2,names:["Aster","Borealis"],teamNames:["Team A","Team B"]},"2v2":{count:4,teams:2,names:["Aster","Borealis","Cirrus","Dusk"],teamNames:["Team A","Team B"]},ffa:{count:4,teams:4,names:["Aster","Borealis","Cirrus","Dusk"],teamNames:["Player 1","Player 2","Player 3","Player 4"]},"3v3":{count:6,teams:2,names:["Aster","Borealis","Cirrus","Dusk","Ember","Frost"],teamNames:["Team A","Team B"]},"4v4":{count:8,teams:2,names:["Aster","Borealis","Cirrus","Dusk","Ember","Frost","Gale","Hollow"],teamNames:["Team A","Team B"]}};
 let mixed=true;
 function render(){
- const key=$("mode").value,c=configs[key],ffa=key==="ffa";
+ const key=$("mode").value,c=configs[key],ffa=key==="ffa";$("same").disabled=ffa;$("same").title=ffa?"FFA has no teams; creator grouping does not apply.":"";
  const creatorNames=["Northstar Labs","Workshop Collective","Copperfield AI","Independent Studio"];
  const buildNames=["0.8.2","1.1.0","0.4.7","2.0.1"];
- const slots=c.names.map((name,i)=>({name,creator:mixed?creatorNames[i%creatorNames.length]:(i%2===0?"Northstar Labs":"Workshop Collective"),build:buildNames[i%buildNames.length],team:ffa?i:Math.floor(i/(c.count/2))}));
+ const slots=c.names.map((name,i)=>({name,creator:mixed?creatorNames[i%creatorNames.length]:(ffa?(i%2===0?"Northstar Labs":"Workshop Collective"):(Math.floor(i/(c.count/2))===0?"Northstar Labs":"Workshop Collective")),build:buildNames[i%buildNames.length],team:ffa?i:Math.floor(i/(c.count/2))}));
  $("players").textContent=c.count;$("teams").textContent=c.teams;$("creators").textContent=new Set(slots.map(x=>x.creator)).size;
  $("mode-stamp").textContent=(key==="ffa"?"FFA":key)+" · "+c.count+" slots";
  const target=$("teams-view");target.innerHTML="";
