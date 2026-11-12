@@ -774,62 +774,6 @@ static Task HostPlacementSkipsUnplacedDependents()
     return Task.CompletedTask;
 }
 
-static void Assert(bool condition, string message)
-{
-    if (!condition) throw new InvalidOperationException(message);
-}
-
-sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
-{
-    public string RoleId => roleId;
-
-    public ValueTask<RoleStartResult> StartAsync(
-        ServerRoleManifest manifest,
-        CancellationToken cancellationToken) =>
-        ValueTask.FromResult(new RoleStartResult(true, "ready"));
-}
-
-sealed class RecordingAdapter(string roleId, List<string> starts) : IServerRoleAdapter
-{
-    public string RoleId => roleId;
-    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
-    {
-        starts.Add(manifest.InstanceId);
-        return ValueTask.FromResult(new RoleStartResult(true, "ready"));
-    }
-}
-
-sealed class SelectiveAdapter(string roleId, List<string> starts, string failedInstanceId) : IServerRoleAdapter
-{
-    public string RoleId => roleId;
-    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
-    {
-        starts.Add(manifest.InstanceId);
-        return ValueTask.FromResult(new RoleStartResult(
-            manifest.InstanceId != failedInstanceId,
-            manifest.InstanceId == failedInstanceId ? "simulated failure" : "ready"));
-    }
-}
-
-
-sealed class TestBotBuildCatalog(
-    IReadOnlyDictionary<(string BotIdentityId, string BuildId), RegisteredBotBuild> builds)
-    : IRegisteredBotBuildCatalog
-{
-    public int LookupCount { get; private set; }
-
-    public ValueTask<RegisteredBotBuild?> FindBuildAsync(
-        string botIdentityId,
-        string buildId,
-        CancellationToken cancellationToken = default)
-    {
-        LookupCount++;
-        cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(
-            builds.TryGetValue((botIdentityId, buildId), out var registration) ? registration : null);
-    }
-}
-
 
 static async Task DurableRegistryCommitsBeforePublishingAndRecovers()
 {
@@ -891,6 +835,78 @@ static async Task DurableRegistryPersistsEligibility()
         "Eligibility was exposed without a matching durable registry commit.");
 }
 
+static async Task DurableRegistryRejectsStaleRevision()
+{
+    var store = new TestBotBuildRegistryStore();
+    using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
+    store.Snapshot = new BotBuildRegistrySnapshot(1, Array.Empty<RegisteredBotBuild>());
+    var result = await registry.RegisterAsync(
+        new BotBuildReference("bot-a", "build-a", new string('d', 64)),
+        BotBuildEligibilityStatus.Eligible);
+    var visible = await registry.FindBuildAsync("bot-a", "build-a");
+    Assert(!result.Committed && result.Error is not null &&
+           registry.Revision == 0 && visible is null &&
+           store.Snapshot.Revision == 1 && store.Snapshot.Registrations.Count == 0,
+        "A stale registry instance published a mutation after its compare-and-swap was rejected.");
+}
+
+static void Assert(bool condition, string message)
+{
+    if (!condition) throw new InvalidOperationException(message);
+}
+
+sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+
+    public ValueTask<RoleStartResult> StartAsync(
+        ServerRoleManifest manifest,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new RoleStartResult(true, "ready"));
+}
+
+sealed class RecordingAdapter(string roleId, List<string> starts) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
+    {
+        starts.Add(manifest.InstanceId);
+        return ValueTask.FromResult(new RoleStartResult(true, "ready"));
+    }
+}
+
+sealed class SelectiveAdapter(string roleId, List<string> starts, string failedInstanceId) : IServerRoleAdapter
+{
+    public string RoleId => roleId;
+    public ValueTask<RoleStartResult> StartAsync(ServerRoleManifest manifest, CancellationToken cancellationToken)
+    {
+        starts.Add(manifest.InstanceId);
+        return ValueTask.FromResult(new RoleStartResult(
+            manifest.InstanceId != failedInstanceId,
+            manifest.InstanceId == failedInstanceId ? "simulated failure" : "ready"));
+    }
+}
+
+
+sealed class TestBotBuildCatalog(
+    IReadOnlyDictionary<(string BotIdentityId, string BuildId), RegisteredBotBuild> builds)
+    : IRegisteredBotBuildCatalog
+{
+    public int LookupCount { get; private set; }
+
+    public ValueTask<RegisteredBotBuild?> FindBuildAsync(
+        string botIdentityId,
+        string buildId,
+        CancellationToken cancellationToken = default)
+    {
+        LookupCount++;
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(
+            builds.TryGetValue((botIdentityId, buildId), out var registration) ? registration : null);
+    }
+}
+
+
 sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
 {
     public BotBuildRegistrySnapshot Snapshot { get; set; }
@@ -923,19 +939,4 @@ sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
         Snapshot = replacement;
         return ValueTask.FromResult(BotBuildRegistryCommitResult.Committed);
     }
-}
-
-static async Task DurableRegistryRejectsStaleRevision()
-{
-    var store = new TestBotBuildRegistryStore();
-    using var registry = await DurableBotBuildRegistry.OpenAsync(store, capacity: 8, pageSize: 64);
-    store.Snapshot = new BotBuildRegistrySnapshot(1, Array.Empty<RegisteredBotBuild>());
-    var result = await registry.RegisterAsync(
-        new BotBuildReference("bot-a", "build-a", new string('d', 64)),
-        BotBuildEligibilityStatus.Eligible);
-    var visible = await registry.FindBuildAsync("bot-a", "build-a");
-    Assert(!result.Committed && result.Error is not null &&
-           registry.Revision == 0 && visible is null &&
-           store.Snapshot.Revision == 1 && store.Snapshot.Registrations.Count == 0,
-        "A stale registry instance published a mutation after its compare-and-swap was rejected.");
 }
