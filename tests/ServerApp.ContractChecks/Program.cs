@@ -29,7 +29,10 @@ var checks = new (string Name, Func<Task> Run)[]
     ("match assignment pins immutable participant builds", MatchAssignmentPinsBuilds),
     ("match assignment rejects unsupported topology", MatchAssignmentRejectsUnsupportedTopology),
     ("match assignment rejects duplicate bot identities and invalid hashes", MatchAssignmentRejectsDuplicateBotsAndInvalidHashes),
-    ("match assignment snapshots participant collection", MatchAssignmentSnapshotsParticipants)
+    ("match assignment snapshots participant collection", MatchAssignmentSnapshotsParticipants),
+    ("1v1 admission resolves two eligible distinct bot builds", MatchAdmissionResolvesEligibleBuilds),
+    ("1v1 admission rejects unavailable and mismatched builds", MatchAdmissionRejectsUnavailableAndMismatchedBuilds),
+    ("1v1 admission rejects duplicate bot identities before lookup", MatchAdmissionRejectsDuplicateIdentities)
 };
 
 var failures = new List<string>();
@@ -49,6 +52,61 @@ foreach (var check in checks)
 
 Console.WriteLine($"{checks.Length - failures.Count}/{checks.Length} contract checks passed.");
 return failures.Count == 0 ? 0 : 1;
+
+
+static async Task MatchAdmissionResolvesEligibleBuilds()
+{
+    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
+    {
+        ["bot-a"] = new("bot-a", "build-a", new string('a', 64)),
+        ["bot-b"] = new("bot-b", "build-b", new string('b', 64))
+    });
+    var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
+    var result = await service.AdmitAsync(new MatchAdmissionRequest(
+        "1v1",
+        new MatchAdmissionParticipant("participant-a", "bot-a"),
+        new MatchAdmissionParticipant("participant-b", "bot-b")));
+
+    Assert(result.IsAdmitted && result.Assignment is not null &&
+           result.Assignment.Participants.Count == 2 &&
+           result.Assignment.Participants.Select(x => x.BotBuild.BotIdentityId)
+               .SequenceEqual(["bot-a", "bot-b"]) &&
+           CompetitionContractValidator.ValidateAssignment(TestCompetition(), result.Assignment).Count == 0,
+        $"A valid 1v1 admission failed: {string.Join("; ", result.Errors.Select(x => x.Message))}");
+}
+
+static async Task MatchAdmissionRejectsUnavailableAndMismatchedBuilds()
+{
+    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
+    {
+        ["bot-a"] = new("different-bot", "build-a", new string('a', 64))
+    });
+    var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
+    var result = await service.AdmitAsync(new MatchAdmissionRequest(
+        "1v1",
+        new MatchAdmissionParticipant("participant-a", "bot-a"),
+        new MatchAdmissionParticipant("participant-b", "bot-b")));
+
+    Assert(!result.IsAdmitted && result.Assignment is null &&
+           result.Errors.Any(x => x.Code == "admission.bot-build.identity-mismatch") &&
+           result.Errors.Any(x => x.Code == "admission.bot-build.ineligible"),
+        "Admission accepted an unavailable build or a catalog result for another identity.");
+}
+
+static async Task MatchAdmissionRejectsDuplicateIdentities()
+{
+    var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>());
+    var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
+    var result = await service.AdmitAsync(new MatchAdmissionRequest(
+        "1v1",
+        new MatchAdmissionParticipant("participant-a", "same-bot"),
+        new MatchAdmissionParticipant("participant-b", "same-bot")));
+
+    Assert(!result.IsAdmitted && result.Assignment is null &&
+           result.Errors.Any(x => x.Code == "admission.bot-identity.duplicate") &&
+           catalog.LookupCount == 0,
+        "Duplicate bot identities were looked up or admitted.");
+}
 
 static Task VersionOneJsonParses()
 {
@@ -519,5 +577,21 @@ sealed class SelectiveAdapter(string roleId, List<string> starts, string failedI
         return ValueTask.FromResult(new RoleStartResult(
             manifest.InstanceId != failedInstanceId,
             manifest.InstanceId == failedInstanceId ? "simulated failure" : "ready"));
+    }
+}
+
+
+sealed class TestBotBuildCatalog(
+    IReadOnlyDictionary<string, BotBuildReference> builds) : IEligibleBotBuildCatalog
+{
+    public int LookupCount { get; private set; }
+
+    public ValueTask<BotBuildReference?> FindEligibleBuildAsync(
+        string botIdentityId,
+        CancellationToken cancellationToken = default)
+    {
+        LookupCount++;
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(builds.TryGetValue(botIdentityId, out var build) ? build : null);
     }
 }
