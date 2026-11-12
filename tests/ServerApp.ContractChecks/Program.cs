@@ -39,6 +39,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("DataWarehouse catalogue stores and resolves immutable build records", DataWarehouseCatalogStoresBuilds),
     ("DataWarehouse catalogue restores from durable domain snapshots", DataWarehouseCatalogRestoresSnapshot),
     ("DataWarehouse catalogue handles thousands of fixed-record builds", DataWarehouseCatalogHandlesLargeBuildSets),
+    ("DataWarehouse catalogue serializes concurrent callers", DataWarehouseCatalogSerializesConcurrentCallers),
     ("DataWarehouse catalogue updates eligibility without changing build identity", DataWarehouseCatalogUpdatesEligibility),
     ("DataWarehouse catalogue rejects duplicates, invalid hashes, and capacity overflow", DataWarehouseCatalogRejectsInvalidRegistration)
 };
@@ -221,6 +222,30 @@ static async Task DataWarehouseCatalogHandlesLargeBuildSets()
            last?.Build.ContentSha256 == new string('D', 64) &&
            catalog.CreateSnapshot().Count == count,
         "The fixed-record catalogue lost or corrupted records under a multi-thousand-build workload.");
+}
+
+static async Task DataWarehouseCatalogSerializesConcurrentCallers()
+{
+    using var catalog = new DataWarehouseBotBuildCatalog(capacity: 128);
+    var duplicate = new BotBuildReference("same-bot", "same-build", new string('a', 64));
+    var duplicateAttempts = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
+        catalog.TryRegister(duplicate, BotBuildEligibilityStatus.Eligible, out _))));
+    Assert(duplicateAttempts.Count(x => x) == 1,
+        "Concurrent duplicate registrations were not serialized into exactly one accepted record.");
+
+    var registrations = Enumerable.Range(0, 127).Select(i => Task.Run(() =>
+        catalog.TryRegister(
+            new BotBuildReference($"bot-{i:D3}", $"build-{i:D3}", new string('b', 64)),
+            BotBuildEligibilityStatus.Eligible,
+            out _)));
+    var results = await Task.WhenAll(registrations);
+    Assert(results.All(x => x) && catalog.RegisteredBuildCount == 128,
+        "Concurrent independent registrations corrupted the DataWarehouse catalogue.");
+
+    var lookups = await Task.WhenAll(Enumerable.Range(0, 127).Select(i =>
+        catalog.FindBuildAsync($"bot-{i:D3}", $"build-{i:D3}").AsTask()));
+    Assert(lookups.All(x => x?.Eligibility == BotBuildEligibilityStatus.Eligible),
+        "Concurrent catalogue reads returned missing or invalid records.");
 }
 
 static async Task DataWarehouseCatalogUpdatesEligibility()
