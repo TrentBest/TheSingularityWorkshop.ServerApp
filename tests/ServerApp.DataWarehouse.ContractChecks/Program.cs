@@ -13,7 +13,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("durable registry commits before publishing and recovers after restart", DurableRegistryCommitsBeforePublishingAndRecovers),
     ("durable registry leaves visible state unchanged after store failure", DurableRegistryStoreFailureLeavesVisibleState),
     ("durable registry persists eligibility before changing admission state", DurableRegistryPersistsEligibility),
-    ("durable registry fails closed on a stale store revision", DurableRegistryRejectsStaleRevision)
+    ("durable registry fails closed on a stale store revision", DurableRegistryRejectsStaleRevision),
+    ("durable registry snapshots reject unknown schema versions", DurableRegistryRejectsUnknownSchemaVersion)
 };
 
 var failures = new List<string>();
@@ -268,6 +269,22 @@ static async Task DurableRegistryPersistsEligibility()
            store.Snapshot.Registrations.Single().Eligibility == BotBuildEligibilityStatus.Eligible &&
            visible?.Eligibility == BotBuildEligibilityStatus.Eligible,
         "Eligibility was exposed without a matching durable registry commit.");
+}
+
+static Task DurableRegistryRejectsUnknownSchemaVersion()
+{
+    try
+    {
+        _ = new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>(), schemaVersion: 2);
+        throw new InvalidOperationException("An unknown durable snapshot schema version was accepted.");
+    }
+    catch (NotSupportedException)
+    {
+        var current = new BotBuildRegistrySnapshot(0, Array.Empty<RegisteredBotBuild>());
+        Assert(current.SchemaVersion == BotBuildRegistrySnapshot.CurrentSchemaVersion,
+            "A current snapshot did not expose its explicit schema version.");
+        return Task.CompletedTask;
+    }
 }
 
 static async Task DurableRegistryRejectsStaleRevision()
