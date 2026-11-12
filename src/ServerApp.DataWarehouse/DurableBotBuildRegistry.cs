@@ -17,6 +17,7 @@ public sealed class DurableBotBuildRegistry : IRegisteredBotBuildCatalog, IDispo
     private DataWarehouseBotBuildCatalog _catalog;
     private long _revision;
     private int _disposed;
+    private int _disposeStarted;
 
     private DurableBotBuildRegistry(
         IBotBuildRegistryStore store,
@@ -177,6 +178,8 @@ public sealed class DurableBotBuildRegistry : IRegisteredBotBuildCatalog, IDispo
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
+            return;
         _mutation.Wait();
         try
         {
