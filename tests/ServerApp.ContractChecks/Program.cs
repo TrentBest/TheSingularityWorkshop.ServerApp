@@ -32,7 +32,9 @@ var checks = new (string Name, Func<Task> Run)[]
     ("match assignment snapshots participant collection", MatchAssignmentSnapshotsParticipants),
     ("1v1 admission resolves two eligible distinct bot builds", MatchAdmissionResolvesEligibleBuilds),
     ("1v1 admission rejects unavailable and mismatched builds", MatchAdmissionRejectsUnavailableAndMismatchedBuilds),
-    ("1v1 admission rejects duplicate bot identities before lookup", MatchAdmissionRejectsDuplicateIdentities)
+    ("1v1 admission rejects duplicate bot identities before lookup", MatchAdmissionRejectsDuplicateIdentities),
+    ("1v1 admission rejects ineligible build states", MatchAdmissionRejectsIneligibleBuilds),
+    ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild)
 };
 
 var failures = new List<string>();
@@ -58,14 +60,14 @@ static async Task MatchAdmissionResolvesEligibleBuilds()
 {
     var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
     {
-        ["bot-a"] = new("bot-a", "build-a", new string('a', 64)),
-        ["bot-b"] = new("bot-b", "build-b", new string('b', 64))
+        [("bot-a", "build-a")] = new(new("bot-a", "build-a", new string('a', 64)), BotBuildEligibilityStatus.Eligible),
+        [("bot-b", "build-b")] = new(new("bot-b", "build-b", new string('b', 64)), BotBuildEligibilityStatus.Eligible)
     });
     var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
     var result = await service.AdmitAsync(new MatchAdmissionRequest(
         "1v1",
-        new MatchAdmissionParticipant("participant-a", "bot-a"),
-        new MatchAdmissionParticipant("participant-b", "bot-b")));
+        new MatchAdmissionParticipant("participant-a", "bot-a", "build-a"),
+        new MatchAdmissionParticipant("participant-b", "bot-b", "build-b")));
 
     Assert(result.IsAdmitted && result.Assignment is not null &&
            result.Assignment.Participants.Count == 2 &&
@@ -79,13 +81,13 @@ static async Task MatchAdmissionRejectsUnavailableAndMismatchedBuilds()
 {
     var catalog = new TestBotBuildCatalog(new Dictionary<string, BotBuildReference>(StringComparer.Ordinal)
     {
-        ["bot-a"] = new("different-bot", "build-a", new string('a', 64))
+        [("bot-a", "build-a")] = new(new("different-bot", "build-a", new string('a', 64)), BotBuildEligibilityStatus.Eligible)
     });
     var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
     var result = await service.AdmitAsync(new MatchAdmissionRequest(
         "1v1",
-        new MatchAdmissionParticipant("participant-a", "bot-a"),
-        new MatchAdmissionParticipant("participant-b", "bot-b")));
+        new MatchAdmissionParticipant("participant-a", "bot-a", "build-a"),
+        new MatchAdmissionParticipant("participant-b", "bot-b", "build-b")));
 
     Assert(!result.IsAdmitted && result.Assignment is null &&
            result.Errors.Any(x => x.Code == "admission.bot-build.identity-mismatch") &&
@@ -99,13 +101,55 @@ static async Task MatchAdmissionRejectsDuplicateIdentities()
     var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
     var result = await service.AdmitAsync(new MatchAdmissionRequest(
         "1v1",
-        new MatchAdmissionParticipant("participant-a", "same-bot"),
-        new MatchAdmissionParticipant("participant-b", "same-bot")));
+        new MatchAdmissionParticipant("participant-a", "same-bot", "build-a"),
+        new MatchAdmissionParticipant("participant-b", "same-bot", "build-b")));
 
     Assert(!result.IsAdmitted && result.Assignment is null &&
            result.Errors.Any(x => x.Code == "admission.bot-identity.duplicate") &&
            catalog.LookupCount == 0,
         "Duplicate bot identities were looked up or admitted.");
+}
+
+static async Task MatchAdmissionRejectsIneligibleBuilds()
+{
+    foreach (var status in new[]
+    {
+        BotBuildEligibilityStatus.PendingReview,
+        BotBuildEligibilityStatus.Suspended,
+        BotBuildEligibilityStatus.Revoked
+    })
+    {
+        var catalog = new TestBotBuildCatalog(new Dictionary<(string, string), RegisteredBotBuild>
+        {
+            [("bot-a", "build-a")] = new(new("bot-a", "build-a", new string('a', 64)), status),
+            [("bot-b", "build-b")] = new(new("bot-b", "build-b", new string('b', 64)), BotBuildEligibilityStatus.Eligible)
+        });
+        var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
+        var result = await service.AdmitAsync(new MatchAdmissionRequest(
+            "1v1",
+            new MatchAdmissionParticipant("participant-a", "bot-a", "build-a"),
+            new MatchAdmissionParticipant("participant-b", "bot-b", "build-b")));
+        Assert(!result.IsAdmitted && result.Errors.Any(x => x.Code == "admission.bot-build.first.ineligible"),
+            $"Build status {status} was admitted.");
+    }
+}
+
+static async Task MatchAdmissionRequiresExactBuild()
+{
+    var catalog = new TestBotBuildCatalog(new Dictionary<(string, string), RegisteredBotBuild>
+    {
+        [("bot-a", "build-new")] = new(new("bot-a", "build-new", new string('a', 64)), BotBuildEligibilityStatus.Eligible),
+        [("bot-b", "build-b")] = new(new("bot-b", "build-b", new string('b', 64)), BotBuildEligibilityStatus.Eligible)
+    });
+    var service = new MatchAdmissionService(TestCompetition(), catalog, "sc2-adapter-1.0.0");
+    var result = await service.AdmitAsync(new MatchAdmissionRequest(
+        "1v1",
+        new MatchAdmissionParticipant("participant-a", "bot-a", "build-old"),
+        new MatchAdmissionParticipant("participant-b", "bot-b", "build-b")));
+
+    Assert(!result.IsAdmitted && result.Assignment is null &&
+           result.Errors.Any(x => x.Code == "admission.bot-build.not-found"),
+        "Admission silently substituted a different build for the requested build.");
 }
 
 static Task VersionOneJsonParses()
@@ -582,16 +626,19 @@ sealed class SelectiveAdapter(string roleId, List<string> starts, string failedI
 
 
 sealed class TestBotBuildCatalog(
-    IReadOnlyDictionary<string, BotBuildReference> builds) : IEligibleBotBuildCatalog
+    IReadOnlyDictionary<(string BotIdentityId, string BuildId), RegisteredBotBuild> builds)
+    : IRegisteredBotBuildCatalog
 {
     public int LookupCount { get; private set; }
 
-    public ValueTask<BotBuildReference?> FindEligibleBuildAsync(
+    public ValueTask<RegisteredBotBuild?> FindBuildAsync(
         string botIdentityId,
+        string buildId,
         CancellationToken cancellationToken = default)
     {
         LookupCount++;
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(builds.TryGetValue(botIdentityId, out var build) ? build : null);
+        return ValueTask.FromResult(
+            builds.TryGetValue((botIdentityId, buildId), out var registration) ? registration : null);
     }
 }
