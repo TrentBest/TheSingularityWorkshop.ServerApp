@@ -228,8 +228,10 @@ static async Task DataWarehouseCatalogSerializesConcurrentCallers()
 {
     using var catalog = new DataWarehouseBotBuildCatalog(capacity: 128);
     var duplicate = new BotBuildReference("same-bot", "same-build", new string('a', 64));
-    var duplicateAttempts = await Task.WhenAll(Enumerable.Range(0, 32).Select(_ => Task.Run(() =>
-        catalog.TryRegister(duplicate, BotBuildEligibilityStatus.Eligible, out _))));
+    var duplicateAttempts = await Task.WhenAll(Enumerable.Range(0, 32).Select(index => Task.Run(() =>
+    {
+        return catalog.TryRegister(duplicate, BotBuildEligibilityStatus.Eligible, out var ignored);
+    })));
     Assert(duplicateAttempts.Count(x => x) == 1,
         "Concurrent duplicate registrations were not serialized into exactly one accepted record.");
 
