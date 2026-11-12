@@ -43,11 +43,12 @@
 
 1. Preserve direct development-branch work; inspect current source, tests, docs, workflows, and commit evidence before each implementation slice.
 2. Keep the core host and its contract checks dependency-free. Build and verify DataWarehouse only through its explicit integration project and dedicated checks.
-3. Resolve the persistence choice with the owner, then implement a concrete store behind `IBotBuildRegistryStore` without moving durability into DataWarehouse.
-4. Implement and verify the concrete store's schema migration, corruption handling, duplicates, interrupted writes, atomic replacement/transaction behavior, compare-and-swap concurrency, restart recovery, and failure injection. The current domain contract now rejects unknown schema versions; it does not itself migrate serialized files.
-5. Run the complete ServerApp CI and both contract-check suites against the resulting revision; distinguish source implementation from verified behavior.
-6. Continue the 1v1 vertical slice only after the store/recovery boundary is proven, then add the SC2 game-session adapter and authoritative result intake.
-7. Keep 2v2, FFA, 3v3, 4v4, ratings, and multi-host operation staged behind real 1v1 evidence.
+3. Implement the concrete database-free file store behind `IBotBuildRegistryStore`; the architecture decision is settled. Keep it in an isolated host-storage project so the default ServerApp solution and DataWarehouse remain independently consumable.
+4. Use framed binary journal records with explicit schema/revision metadata and checksums; serialize cross-process writers, compare the authoritative revision under that lock, and durably flush before returning `Committed`. Recover an incomplete final frame as a torn tail, but fail closed on a complete frame with invalid framing/checksum or unsupported schema. Add compact checkpoints and safe journal rotation only after append/replay semantics are proven.
+5. Verify restart recovery, interrupted writes, corruption, duplicate keys, capacity, multi-instance/process CAS, checkpoint replacement, and failure injection. The current domain contract rejects unknown schema versions; it does not itself migrate serialized files.
+6. Run the complete ServerApp CI and all contract-check suites against the resulting revision; distinguish source implementation from verified behavior.
+7. Continue the 1v1 vertical slice only after the store/recovery boundary is proven, then add the SC2 game-session adapter and authoritative result intake.
+8. Keep 2v2, FFA, 3v3, 4v4, ratings, and multi-host operation staged behind real 1v1 evidence.
 
 ## Platform invariants
 
