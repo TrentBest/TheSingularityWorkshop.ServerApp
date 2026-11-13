@@ -76,6 +76,7 @@ public sealed class GameSessionCoordinator
 
     private readonly CompetitionDefinition _competition;
     private readonly IGameSessionAdapter _adapter;
+    private readonly string _adapterVersion;
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.Ordinal);
 
     public GameSessionCoordinator(CompetitionDefinition competition, IGameSessionAdapter adapter)
@@ -89,6 +90,7 @@ public sealed class GameSessionCoordinator
 
         _competition = competition;
         _adapter = adapter;
+        _adapterVersion = adapter.AdapterVersion;
     }
 
     /// <summary>
@@ -101,7 +103,7 @@ public sealed class GameSessionCoordinator
     {
         ArgumentNullException.ThrowIfNull(assignment);
         var errors = CompetitionContractValidator.ValidateAssignment(_competition, assignment).ToList();
-        if (!string.Equals(assignment.GameAdapterVersion, _adapter.AdapterVersion, StringComparison.Ordinal))
+        if (!string.Equals(assignment.GameAdapterVersion, _adapterVersion, StringComparison.Ordinal))
             errors.Add(new("session.adapter.version",
                 "The assignment's game adapter version does not match the registered host adapter."));
         if (errors.Count != 0)
@@ -109,7 +111,7 @@ public sealed class GameSessionCoordinator
 
         var sessionId = Guid.NewGuid().ToString("N");
         var starting = new GameSessionSnapshot(
-            assignment.MatchId, sessionId, _adapter.AdapterVersion,
+            assignment.MatchId, sessionId, _adapterVersion,
             GameSessionState.Starting, DateTimeOffset.UtcNow);
         var entry = new SessionEntry(starting);
         if (!_sessions.TryAdd(assignment.MatchId, entry))
@@ -144,7 +146,7 @@ public sealed class GameSessionCoordinator
             }
 
             var validationError = ValidateAdapterSnapshot(
-                adapterSnapshot, assignment.MatchId, sessionId, _adapter.AdapterVersion);
+                adapterSnapshot, assignment.MatchId, sessionId, _adapterVersion);
             if (validationError is null && adapterSnapshot.ObservedAtUtc < starting.ObservedAtUtc)
                 validationError = "The game-session adapter returned a readiness timestamp earlier than the host's start request.";
             if (validationError is not null)
@@ -226,7 +228,7 @@ public sealed class GameSessionCoordinator
                 return current;
 
             var validationError = ValidateAdapterSnapshot(
-                observed, current.MatchId, current.SessionId, _adapter.AdapterVersion);
+                observed, current.MatchId, current.SessionId, _adapterVersion);
             if (validationError is null && observed.ObservedAtUtc < current.ObservedAtUtc)
                 validationError = "The game-session adapter returned a stale lifecycle timestamp.";
             if (validationError is not null)
