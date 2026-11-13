@@ -116,7 +116,9 @@ public sealed class GameSessionCoordinator
             return new(null, [new("session.match.duplicate",
                 "A game session has already been started or reserved for this match ID.")]);
 
-        await entry.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // This entry is new and its gate is uncontended. Acquire it independently of caller
+        // cancellation so a pre-cancelled request can still leave an explicit Aborted record.
+        await entry.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             GameSessionSnapshot adapterSnapshot;
@@ -134,6 +136,7 @@ public sealed class GameSessionCoordinator
             }
             catch (Exception exception)
             {
+                await TryStopAfterFailedStartAsync(sessionId).ConfigureAwait(false);
                 entry.Snapshot = CreateTerminal(starting, GameSessionState.Failed,
                     "session.start.exception", exception.Message);
                 return Failure(entry.Snapshot, "session.start.exception",
@@ -311,6 +314,12 @@ public sealed class GameSessionCoordinator
             return "The game-session adapter timestamp must use UTC.";
         if (!Enum.IsDefined(snapshot.State))
             return "The game-session adapter returned an unknown lifecycle state.";
+        if (snapshot.State == GameSessionState.Failed &&
+            (string.IsNullOrWhiteSpace(snapshot.FailureCode) || string.IsNullOrWhiteSpace(snapshot.FailureMessage)))
+            return "A Failed game session must include a failure code and message.";
+        if (snapshot.State != GameSessionState.Failed &&
+            (snapshot.FailureCode is not null || snapshot.FailureMessage is not null))
+            return "Only a Failed game session may include failure metadata.";
         return null;
     }
 
