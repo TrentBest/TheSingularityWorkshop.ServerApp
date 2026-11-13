@@ -71,7 +71,7 @@ public sealed class GameSessionCoordinator
     private sealed class SessionEntry(GameSessionSnapshot initial)
     {
         public readonly SemaphoreSlim Gate = new(1, 1);
-        public GameSessionSnapshot Snapshot = initial;
+        public volatile GameSessionSnapshot Snapshot = initial;
     }
 
     private readonly CompetitionDefinition _competition;
@@ -145,6 +145,8 @@ public sealed class GameSessionCoordinator
 
             var validationError = ValidateAdapterSnapshot(
                 adapterSnapshot, assignment.MatchId, sessionId, _adapter.AdapterVersion);
+            if (validationError is null && adapterSnapshot.ObservedAtUtc < starting.ObservedAtUtc)
+                validationError = "The game-session adapter returned a readiness timestamp earlier than the host's start request.";
             if (validationError is not null)
             {
                 await TryStopAfterFailedStartAsync(sessionId).ConfigureAwait(false);
@@ -225,6 +227,8 @@ public sealed class GameSessionCoordinator
 
             var validationError = ValidateAdapterSnapshot(
                 observed, current.MatchId, current.SessionId, _adapter.AdapterVersion);
+            if (validationError is null && observed.ObservedAtUtc < current.ObservedAtUtc)
+                validationError = "The game-session adapter returned a stale lifecycle timestamp.";
             if (validationError is not null)
             {
                 entry.Snapshot = CreateTerminal(current, GameSessionState.Failed,
