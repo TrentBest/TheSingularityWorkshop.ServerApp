@@ -35,6 +35,13 @@ var checks = new (string Name, Func<Task> Run)[]
     ("1v1 admission rejects duplicate bot identities before lookup", MatchAdmissionRejectsDuplicateIdentities),
     ("1v1 admission rejects ineligible build states", MatchAdmissionRejectsIneligibleBuilds),
     ("1v1 admission requires the exact requested immutable build", MatchAdmissionRequiresExactBuild),
+    ("game session starts only after the adapter reports Ready", GameSessionStartsReady),
+    ("game session rejects an adapter version mismatch before launch", GameSessionRejectsAdapterVersionMismatch),
+    ("game session rejects mismatched adapter session identity", GameSessionRejectsMismatchedSessionIdentity),
+    ("game session accepts only legal lifecycle transitions", GameSessionValidatesLifecycleTransitions),
+    ("game session stop records Aborted after adapter shutdown", GameSessionStopRecordsAborted),
+    ("game session rejects duplicate match starts", GameSessionRejectsDuplicateStarts),
+    ("cancelled game-session startup leaves an Aborted record", GameSessionCancellationLeavesAborted),
 };
 
 var failures = new List<string>();
@@ -588,6 +595,126 @@ static Task HostPlacementSkipsUnplacedDependents()
 }
 
 
+static async Task GameSessionStartsReady()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var result = await coordinator.StartAsync(TestAssignment());
+    Assert(result.IsReady && result.Session?.State == GameSessionState.Ready &&
+           result.Session.MatchId == "match-01" && adapter.StartCount == 1,
+        "The coordinator did not publish Ready after a successful adapter readiness response.");
+}
+
+static async Task GameSessionRejectsAdapterVersionMismatch()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var assignment = new MatchAssignment(
+        "match-version", "sc2-ranked", "starcraft-ii", "ladder-standard", "1.0.0",
+        "1v1", "sc2-adapter-2.0.0", DateTimeOffset.UtcNow, TestAssignment().Participants);
+    var result = await coordinator.StartAsync(assignment);
+    Assert(!result.IsReady && result.Errors.Any(error => error.Code == "session.adapter.version") &&
+           adapter.StartCount == 0,
+        "A match pinned to another adapter version reached the game-session adapter.");
+}
+
+static async Task GameSessionRejectsMismatchedSessionIdentity()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0")
+    {
+        StartFactory = request => new GameSessionSnapshot(
+            request.Assignment.MatchId, "adapter-invented-session", adapterVersion: "sc2-adapter-1.0.0",
+            GameSessionState.Ready, DateTimeOffset.UtcNow)
+    };
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var result = await coordinator.StartAsync(TestAssignment());
+    Assert(!result.IsReady && result.Session?.State == GameSessionState.Failed &&
+           result.Errors.Any(error => error.Code == "session.start.invalid-snapshot") &&
+           adapter.StopCount == 1,
+        "The host accepted an adapter-selected session identity or failed to clean up the invalid session.");
+}
+
+static async Task GameSessionValidatesLifecycleTransitions()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var started = await coordinator.StartAsync(TestAssignment());
+    Assert(started.IsReady, "The session did not reach Ready.");
+    var sessionId = started.Session!.SessionId;
+
+    adapter.StatusSnapshot = new GameSessionSnapshot(
+        "match-01", sessionId, adapter.AdapterVersion, GameSessionState.Running, DateTimeOffset.UtcNow);
+    var running = await coordinator.RefreshAsync("match-01");
+    Assert(running?.State == GameSessionState.Running, "The Ready-to-Running transition was not accepted.");
+
+    adapter.StatusSnapshot = new GameSessionSnapshot(
+        "match-01", sessionId, adapter.AdapterVersion, GameSessionState.Completed, DateTimeOffset.UtcNow);
+    var completed = await coordinator.RefreshAsync("match-01");
+    Assert(completed?.State == GameSessionState.Completed, "The Running-to-Completed transition was not accepted.");
+
+    adapter.StatusSnapshot = new GameSessionSnapshot(
+        "match-01", sessionId, adapter.AdapterVersion, GameSessionState.Running, DateTimeOffset.UtcNow);
+    var terminal = await coordinator.RefreshAsync("match-01");
+    Assert(terminal?.State == GameSessionState.Completed && adapter.StatusCount == 2,
+        "A terminal match was refreshed or allowed to transition back to Running.");
+}
+
+static async Task GameSessionRejectsIllegalTransition()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var started = await coordinator.StartAsync(TestAssignment());
+    adapter.StatusSnapshot = new GameSessionSnapshot(
+        "match-01", started.Session!.SessionId, adapter.AdapterVersion,
+        GameSessionState.Starting, DateTimeOffset.UtcNow);
+    var observed = await coordinator.RefreshAsync("match-01");
+    Assert(observed?.State == GameSessionState.Failed &&
+           observed.FailureCode == "session.transition.invalid",
+        "The adapter moved a Ready session backwards without failing closed.");
+}
+
+static async Task GameSessionStopRecordsAborted()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var started = await coordinator.StartAsync(TestAssignment());
+    var stopped = await coordinator.StopAsync("match-01");
+    Assert(started.IsReady && stopped?.State == GameSessionState.Aborted &&
+           adapter.StopCount == 1 && stopped.FailureCode is null,
+        "A successfully stopped non-terminal session was not recorded as Aborted.");
+}
+
+static async Task GameSessionRejectsDuplicateStarts()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var first = await coordinator.StartAsync(TestAssignment());
+    var second = await coordinator.StartAsync(TestAssignment());
+    Assert(first.IsReady && !second.IsReady &&
+           second.Errors.Any(error => error.Code == "session.match.duplicate") &&
+           adapter.StartCount == 1,
+        "A duplicate match ID launched more than one external game session.");
+}
+
+static async Task GameSessionCancellationLeavesAborted()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    using var cancellation = new CancellationTokenSource();
+    cancellation.Cancel();
+    try
+    {
+        await coordinator.StartAsync(TestAssignment(), cancellation.Token);
+        throw new InvalidOperationException("A pre-cancelled game-session start unexpectedly completed.");
+    }
+    catch (OperationCanceledException)
+    {
+        var snapshot = coordinator.GetSnapshot("match-01");
+        Assert(snapshot?.State == GameSessionState.Aborted && adapter.StopCount == 1,
+            "A cancelled startup did not leave an explicit Aborted state and cleanup attempt.");
+    }
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
@@ -625,6 +752,43 @@ sealed class SelectiveAdapter(string roleId, List<string> starts, string failedI
     }
 }
 
+
+sealed class TestGameSessionAdapter(string adapterVersion) : IGameSessionAdapter
+{
+    public string AdapterVersion => adapterVersion;
+    public int StartCount { get; private set; }
+    public int StopCount { get; private set; }
+    public int StatusCount { get; private set; }
+    public Func<GameSessionStartRequest, GameSessionSnapshot>? StartFactory { get; init; }
+    public GameSessionSnapshot? StatusSnapshot { get; set; }
+
+    public ValueTask<GameSessionSnapshot> StartAsync(
+        GameSessionStartRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        StartCount++;
+        cancellationToken.ThrowIfCancellationRequested();
+        var snapshot = StartFactory?.Invoke(request) ?? new GameSessionSnapshot(
+            request.Assignment.MatchId, request.SessionId, AdapterVersion,
+            GameSessionState.Ready, DateTimeOffset.UtcNow);
+        return ValueTask.FromResult(snapshot);
+    }
+
+    public ValueTask<GameSessionSnapshot?> GetStatusAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        StatusCount++;
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(StatusSnapshot);
+    }
+
+    public ValueTask StopAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        StopCount++;
+        return ValueTask.CompletedTask;
+    }
+}
 
 sealed class TestBotBuildCatalog(
     IReadOnlyDictionary<(string BotIdentityId, string BuildId), RegisteredBotBuild> builds)
