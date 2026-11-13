@@ -623,7 +623,7 @@ static async Task GameSessionRejectsMismatchedSessionIdentity()
     var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0")
     {
         StartFactory = request => new GameSessionSnapshot(
-            request.Assignment.MatchId, "adapter-invented-session", adapterVersion: "sc2-adapter-1.0.0",
+            request.Assignment.MatchId, "adapter-invented-session", GameAdapterVersion: "sc2-adapter-1.0.0",
             GameSessionState.Ready, DateTimeOffset.UtcNow)
     };
     var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
