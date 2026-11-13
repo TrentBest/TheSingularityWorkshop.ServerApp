@@ -39,6 +39,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("game session rejects an adapter version mismatch before launch", GameSessionRejectsAdapterVersionMismatch),
     ("game session rejects mismatched adapter session identity", GameSessionRejectsMismatchedSessionIdentity),
     ("game session accepts only legal lifecycle transitions", GameSessionValidatesLifecycleTransitions),
+    ("game session rejects stale lifecycle timestamps", GameSessionRejectsStaleLifecycleTimestamp),
     ("game session stop records Aborted after adapter shutdown", GameSessionStopRecordsAborted),
     ("game session rejects duplicate match starts", GameSessionRejectsDuplicateStarts),
     ("cancelled game-session startup leaves an Aborted record", GameSessionCancellationLeavesAborted),
@@ -657,6 +658,20 @@ static async Task GameSessionValidatesLifecycleTransitions()
     var terminal = await coordinator.RefreshAsync("match-01");
     Assert(terminal?.State == GameSessionState.Completed && adapter.StatusCount == 2,
         "A terminal match was refreshed or allowed to transition back to Running.");
+}
+
+static async Task GameSessionRejectsStaleLifecycleTimestamp()
+{
+    var adapter = new TestGameSessionAdapter("sc2-adapter-1.0.0");
+    var coordinator = new GameSessionCoordinator(TestCompetition(), adapter);
+    var started = await coordinator.StartAsync(TestAssignment());
+    adapter.StatusSnapshot = new GameSessionSnapshot(
+        "match-01", started.Session!.SessionId, adapter.AdapterVersion,
+        GameSessionState.Running, started.Session.ObservedAtUtc.AddSeconds(-1));
+    var observed = await coordinator.RefreshAsync("match-01");
+    Assert(observed?.State == GameSessionState.Failed &&
+           observed.FailureCode == "session.observe.invalid-snapshot",
+        "A stale adapter lifecycle timestamp was accepted.");
 }
 
 static async Task GameSessionRejectsIllegalTransition()
