@@ -89,6 +89,10 @@ SingularityBot's architecture already places the SC2 protocol adapter at the edg
 
 A future external game process may need a child-process boundary, bootstrap contract, authenticated IPC, health/readiness protocol, resource limits, and observable termination. The first ServerApp supervised-role milestone in issue #7 is an in-process net8.0 component proof; it is not permission to pretend an external SC2 process can be safely hosted without that separate boundary.
 
+ServerApp now defines the `IGameSessionAdapter` contract and `GameSessionCoordinator` in `src/ServerApp.Core/GameSessionContracts.cs`. The host assigns a session ID, requires the adapter to return an explicit `Ready` snapshot before readiness is visible, checks that the adapter version matches the immutable match assignment, and validates UTC timestamps and monotonic lifecycle transitions. Duplicate match starts are rejected. Cancellation, stop, adapter exceptions, identity mismatches, stale observations, and illegal transitions produce explicit `Aborted` or `Failed` states. This coordinator is process-local; it does not persist sessions or launch a game itself.
+
+The StarCraft II adapter must implement this host contract from a separately composed MicroBundle. Its artifact belongs in the existing [Experiences repository](https://github.com/TrentBest/TheSingularityWorkshop.Experiences), not in SingularityBot's strategy runtime and not in ServerApp.Core. The ServerApp role definition will map an approved `RoleId` to the versioned MicroBundle root(s); FSM_COS composes those roots, and the host obtains the adapter capability from the resulting RuntimeAssembly. The SC2 bundle must own game-specific setup, player-slot/port allocation, SC2 process lifecycle, bot process attachment, readiness, termination, and replay/result evidence. SingularityBot remains an independently launched player process.
+
 ## 5. First proof: 1v1
 
 The first real vertical slice should be deliberately narrow:
