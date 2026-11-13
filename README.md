@@ -6,7 +6,7 @@
 [![Sith Policy](assets/sith-policy.svg)](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/workflows/sith-policy.yml)
 **ServerApp is the Workshop's manifest-driven server fleet and host platform.** Its direction is to provision distinct server roles from validated manifests, place them on suitable hardware, and scale them according to measured demand.
 
-This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet a production server platform. Source-backed local provisioning, host workflow composition, and a durable bot-build registry are implemented as bounded slices. No public endpoint, authentication service, distributed scheduler, or production deployment workflow is claimed here.
+This repository is in its architecture and bootstrap stage. The fleet model is captured as founding product direction; it is not yet a production server platform. Source-backed local provisioning, host workflow composition, a durable bot-build registry, and a game-neutral match-session lifecycle coordinator are implemented as bounded slices. No public endpoint, authentication service, distributed scheduler, or production deployment workflow is claimed here.
 
 This document follows the Workshop's [Documentation Standard](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/master/DOCUMENTATION_STANDARD.md). See [Agent Onboarding](AGENTS.md) before contributing.
 
@@ -76,6 +76,8 @@ git -C _deps/TheSingularityWorkshop.DataWarehouse checkout a019d006dbb2eb4cb525c
 dotnet build .\src\ServerApp.DataWarehouse\ServerApp.DataWarehouse.csproj --configuration Release
 dotnet run --project .\tests\ServerApp.DataWarehouse.ContractChecks\ServerApp.DataWarehouse.ContractChecks.csproj --configuration Release
 ```
+
+`src/ServerApp.Core/GameSessionContracts.cs` defines the game-neutral session adapter boundary and coordinator. It requires the injected adapter to establish Ready before a match session is reported ready, pins the adapter version from the immutable match assignment, and validates subsequent lifecycle transitions. The actual StarCraft II session MicroBundle belongs in the existing [Experiences repository](https://github.com/TrentBest/TheSingularityWorkshop.Experiences); no separate SC2 repository is needed.
 
 The bot-build registry now has a concrete database-free file store in `src/ServerApp.FileStore`. It appends checksummed binary revision frames containing only changed registrations/removals, arbitrates writers across processes, performs revision compare-and-swap, and flushes before acknowledging a commit. Startup validates a compact checkpoint and replays the journal; an incomplete final frame is treated as a torn tail, while complete corruption and unknown schema versions fail closed. `CompactAsync` installs a full checkpoint before rotating the journal. The DataWarehouse coordinator still commits durable state before publishing its replacement hot catalogue. The store is intentionally outside the default solution and is built/tested explicitly by CI, preserving dependency-free ServerApp Core consumers. Its disk-recovery contract checks are in `tests/ServerApp.FileStore.ContractChecks`; CI execution is the next verification gate, so source implementation must not yet be described as a passing durability proof. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
 
