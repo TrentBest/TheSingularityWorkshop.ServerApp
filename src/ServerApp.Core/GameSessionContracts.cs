@@ -86,11 +86,12 @@ public sealed class GameSessionCoordinator
         var definitionErrors = CompetitionContractValidator.ValidateDefinition(competition);
         if (definitionErrors.Count != 0)
             throw new ArgumentException("The competition definition is invalid.", nameof(competition));
-        ArgumentException.ThrowIfNullOrWhiteSpace(adapter.AdapterVersion);
+        var adapterVersion = adapter.AdapterVersion;
+        ArgumentException.ThrowIfNullOrWhiteSpace(adapterVersion);
 
         _competition = competition;
         _adapter = adapter;
-        _adapterVersion = adapter.AdapterVersion;
+        _adapterVersion = adapterVersion;
     }
 
     /// <summary>
