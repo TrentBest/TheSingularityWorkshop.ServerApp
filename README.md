@@ -95,7 +95,7 @@ Run this on the intended ServerApp host machine, then paste the copied report in
 
 ## 🟢 06 — See it in a minute
 
-The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 8 SDK, run the diagnostic Core checks:
+The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 10 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
