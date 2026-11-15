@@ -384,6 +384,12 @@ static async Task DurableRegistryRejectsStaleRevision()
 }
 
 
+static void Assert(bool condition, string message)
+{
+    if (!condition)
+        throw new InvalidOperationException(message);
+}
+
 sealed class TestBotBuildRegistryStore : IBotBuildRegistryStore
 {
     private readonly object _gate = new();
