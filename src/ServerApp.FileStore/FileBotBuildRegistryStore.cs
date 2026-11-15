@@ -364,7 +364,7 @@ public sealed class FileBotBuildRegistryStore : IBotBuildRegistryStore
         if (!Enum.IsDefined(typeof(BotBuildEligibilityStatus), eligibilityValue))
             throw new InvalidDataException($"Unknown bot-build eligibility value {eligibilityValue}.");
         return new RegisteredBotBuild(
-            new BotBuildReference(identity, buildId, Convert.ToHexString(hashBytes)),
+            new BotBuildReference(identity, buildId, Convert.ToHexString(hashBytes).ToLowerInvariant()),
             (BotBuildEligibilityStatus)eligibilityValue);
     }
 
