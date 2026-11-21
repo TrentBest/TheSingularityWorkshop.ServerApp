@@ -51,6 +51,12 @@ jobs:
           repository: TrentBest/TheSingularityWorkshop.DataWarehouse
           ref: a019d006dbb2eb4cb525cd3977c9eafaf6eee616
           path: _deps/TheSingularityWorkshop.DataWarehouse
+      - name: Checkout Economy simulation source (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: TrentBest/TheSingularityWorkshop.Economy
+          ref: a62850001cbfc9e41c07ae1533d64d700542230b
+          path: _deps/TheSingularityWorkshop.Economy
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -58,6 +64,9 @@ jobs:
       - name: Build core and CLI
         run: |
           dotnet build src/ServerApp.Cli/ServerApp.Cli.csproj --configuration Release
+      - name: Build Economy host integration
+        run: |
+          dotnet build src/ServerApp.Economy/ServerApp.Economy.csproj --configuration Release
       - name: Build DataWarehouse integration
         run: |
           dotnet build src/ServerApp.DataWarehouse/ServerApp.DataWarehouse.csproj --configuration Release
