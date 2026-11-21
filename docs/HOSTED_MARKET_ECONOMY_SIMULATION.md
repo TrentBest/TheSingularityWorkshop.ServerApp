@@ -1,6 +1,6 @@
 # Hosted Market-Economy Simulation
 
-**Maturity: implemented; CI verification pending.** This is the first ServerApp-hosted simulation adapter. It runs the deterministic fictional market scenario owned by Economy and routes each authoritative ledger event through ServerApp's in-process simulation message fabric.
+**Maturity: implemented; ServerApp CI and contract checks passed on commit `5ab4189a12a6c644acfab1f4edef1cf1d97be10a`.** This is the first ServerApp-hosted simulation adapter. It runs the deterministic fictional market scenario owned by Economy and routes each authoritative ledger event through ServerApp's in-process simulation message fabric.
 
 ## Ownership boundaries
 
