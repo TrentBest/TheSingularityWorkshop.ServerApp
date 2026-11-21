@@ -1,10 +1,10 @@
 # Deterministic Simulation Message Fabric
 
-**Maturity: source-implemented; CI verification pending.** The first ServerApp simulation transport is an in-process, deterministic message fabric intended for local proofs and simulations. It is not a distributed broker or production transport.
+**Maturity: source-implemented; CI contract checks passed on the current development revision.** The first ServerApp simulation transport is an in-process, deterministic message fabric intended for local proofs and simulations. It is not a distributed broker or production transport.
 
 ## Contract
 
-A host registers each `ISimulationMessageParticipant` explicitly. Registration snapshots the participant's finite accepted-message vocabulary. Each participant owns its own state and validates the content of every message it receives.
+A host registers each `ISimulationMessageParticipant` explicitly. Registration trims and validates participant/role identifiers and snapshots a normalized finite accepted-message vocabulary. IDs and message types that collide after normalization are rejected. Each participant owns its own state and validates the content of every message it receives.
 
 A `SimulationMessageEnvelope` carries:
 - stable message and simulation-run IDs;
