@@ -889,6 +889,31 @@ static async Task SimulationFabricNormalizesIdentifiers()
            delivered[0].Disposition == SimulationMessageDisposition.Delivered &&
            recipient.Received.SequenceEqual([message.MessageId]),
         "Trimmed participant IDs or message types did not resolve consistently with the normalized envelope.");
+
+    var duplicateParticipantRejected = false;
+    try
+    {
+        fabric.Register(new TestSimulationMessageParticipant("sender", "business", ["economy.command"]));
+    }
+    catch (InvalidOperationException)
+    {
+        duplicateParticipantRejected = true;
+    }
+    Assert(duplicateParticipantRejected,
+        "A participant ID that differs only by surrounding whitespace was registered twice.");
+
+    var duplicateVocabularyRejected = false;
+    try
+    {
+        fabric.Register(new TestSimulationMessageParticipant("another", "business",
+            ["economy.command", " economy.command "]));
+    }
+    catch (ArgumentException)
+    {
+        duplicateVocabularyRejected = true;
+    }
+    Assert(duplicateVocabularyRejected,
+        "Message types that normalize to the same identifier were not rejected as duplicates.");
 }
 
 static void Assert(bool condition, string message)
