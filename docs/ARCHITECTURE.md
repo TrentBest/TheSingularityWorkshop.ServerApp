@@ -16,7 +16,7 @@ ServerApp is not one monolithic backend. It coordinates a fleet of distinct serv
 | System | Established or intended responsibility |
 |---|---|
 | FSM_COS | Composition kernel: resolves/validates a host-supplied MicroBundle catalog, composes dependencies, performs bounded arbitration, and returns a RuntimeAssembly. |
-| FSM_API | State/context and process-group execution primitives. Do not create a competing semantic tick or heartbeat. |\n| Foundry | Owns the ServerApp provisioning workflow lifecycle through the source-pinned host integration. It does not compose FSM_COS runtimes. |
+| FSM_API | State/context and process-group execution primitives. Do not create a competing semantic tick or heartbeat. |\n| FSM_Foundry | Owns the ServerApp provisioning workflow lifecycle through the source-pinned host integration. It does not compose FSM_COS runtimes. |
 | AnyApp | Desktop host and desktop presentation. |
 | WebApp | Browser-facing host and browser presentation; independent of desktop AnyApp. |
 | ServerApp | Server fleet provisioning, role hosting, routing/coordination boundaries, capacity placement, and server operational lifecycle. |
