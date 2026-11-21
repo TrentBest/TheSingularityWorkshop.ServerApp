@@ -78,7 +78,8 @@ public static class AutonomousSwarmFaultSimulation
             fabric.Register(group);
             foreach (var agentId in agentIds)
             {
-                var agent = new Agent(agentId, groupId, coordinator.ParticipantId, fabric,
+                var taskName = $"survey-cell:{groupId}:{agentId[^2..]}";
+                var agent = new Agent(agentId, groupId, taskName, coordinator.ParticipantId, fabric,
                     NextId, faultMode, faultedAgentId);
                 agents.Add(agentId, agent);
                 fabric.Register(agent);
@@ -196,6 +197,7 @@ public static class AutonomousSwarmFaultSimulation
     private sealed class Agent(
         string agentId,
         string groupId,
+        string taskName,
         string coordinatorId,
         SimulationMessageFabric fabric,
         Func<Guid> nextId,
@@ -245,8 +247,7 @@ public static class AutonomousSwarmFaultSimulation
                 : acknowledged ? SwarmAgentExecutionState.Completed
                 : SwarmAgentExecutionState.Expired;
             return new SwarmAgentExecutionSnapshot(
-                ParticipantId, groupId,
-                _assignedTask.Length == 0 && expired ? $"survey-cell:{groupId}:fault-expired" : _assignedTask,
+                ParticipantId, groupId, taskName,
                 state, AutonomousSwarmSimulation.InitialAgentResourceUnits, _remaining, acknowledged);
         }
     }
