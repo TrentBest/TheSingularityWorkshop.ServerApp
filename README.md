@@ -130,7 +130,7 @@ The diagnostic adapter and composed role adapters are in-process fixtures; the c
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
 - [Agent Onboarding](AGENTS.md) — branch, architecture, evidence, and contribution rules.
 
-The first milestone is a validated role manifest and one deterministic local provisioning path. Authentication, distributed scheduling, persistent worlds, rendering transport, and production deployment should be separate milestones with independently verified contracts.
+The first local provisioning path remains a source-backed host proof. The next executable platform milestone is the deterministic in-process simulation message fabric, followed by the Economy-backed multi-institution market scenario. Authentication, durable/distributed messaging, multi-host scheduling, persistent worlds, rendering transport, and production deployment remain separate milestones with independently verified contracts.
 
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
