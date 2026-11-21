@@ -49,6 +49,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("simulation fabric rejects unknown participants and unsupported message types", SimulationFabricRejectsUnknownAndUnsupportedMessages),
     ("simulation fabric isolates participant handler failures", SimulationFabricIsolatesHandlerFailures),
     ("simulation fabric rejects virtual-time regression", SimulationFabricRejectsTimeRegression),
+    ("simulation fabric normalizes participant identifiers and message types", SimulationFabricNormalizesIdentifiers),
 };
 
 var failures = new List<string>();
@@ -867,6 +868,27 @@ static async Task SimulationFabricRejectsTimeRegression()
     catch (ArgumentOutOfRangeException)
     {
     }
+}
+
+static async Task SimulationFabricNormalizesIdentifiers()
+{
+    var sender = new TestSimulationMessageParticipant(" sender ", " business ", [" economy.command "]);
+    var recipient = new TestSimulationMessageParticipant(" household-1 ", " household ", [" economy.wage "]);
+    var fabric = new SimulationMessageFabric("normalized-run");
+    fabric.Register(sender);
+    fabric.Register(recipient);
+
+    var message = new SimulationMessageEnvelope(
+        Guid.Parse("50000000-0000-0000-0000-000000000099"),
+        "normalized-run", "sender", "household-1", "economy.wage", 1, 1, 10, "normalized");
+    var accepted = fabric.Enqueue(message);
+    var delivered = await fabric.AdvanceToAsync(1);
+
+    Assert(accepted.Disposition == SimulationMessageDisposition.Accepted &&
+           delivered.Count == 1 &&
+           delivered[0].Disposition == SimulationMessageDisposition.Delivered &&
+           recipient.Received.SequenceEqual([message.MessageId]),
+        "Trimmed participant IDs or message types did not resolve consistently with the normalized envelope.");
 }
 
 static void Assert(bool condition, string message)
