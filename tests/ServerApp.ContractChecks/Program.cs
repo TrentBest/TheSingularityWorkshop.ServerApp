@@ -960,8 +960,12 @@ static async Task HostedMarketEconomyRoutesEvents()
     Assert(receivedOperationIds.SequenceEqual(authoritativeOperationIds),
         "The routed event identities do not match the authoritative Economy receipts.");
     Assert(result.Participants.Values.SelectMany(x => x.ReceivedEvents)
-            .All(item => item.OperationId == item.Postings.FirstOrDefault()?.AccountId ||
-                         item.Postings.Count >= 0),
+            .All(item => item.OperationId != Guid.Empty &&
+                         item.CurrencyId != Guid.Empty &&
+                         item.Amount > 0m &&
+                         !string.IsNullOrWhiteSpace(item.LedgerOperationKind) &&
+                         item.Postings.Count > 0 &&
+                         item.Postings.All(posting => posting.CurrencyId == item.CurrencyId)),
         "A transported Economy event failed its payload contract.");
 }
 
@@ -970,7 +974,8 @@ static async Task HostedMarketEconomyIsDeterministic()
     var first = await HostedMarketEconomySimulation.RunAsync();
     var second = await HostedMarketEconomySimulation.RunAsync();
 
-    Assert(first.Economy.Balances.SequenceEqual(second.Economy.Balances),
+    Assert(first.Economy.Balances.OrderBy(pair => pair.Key)
+            .SequenceEqual(second.Economy.Balances.OrderBy(pair => pair.Key)),
         "Independent hosted runs produced different Economy balances.");
     Assert(first.FabricTrace.Select(item =>
             (item.MessageId, item.Disposition, item.Step, item.Sequence))
