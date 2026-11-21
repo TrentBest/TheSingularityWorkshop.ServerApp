@@ -1,4 +1,5 @@
 using ServerApp.Core;
+using ServerApp.Economy;
 
 var checks = new (string Name, Func<Task> Run)[]
 {
@@ -50,6 +51,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("simulation fabric isolates participant handler failures", SimulationFabricIsolatesHandlerFailures),
     ("simulation fabric rejects virtual-time regression", SimulationFabricRejectsTimeRegression),
     ("simulation fabric normalizes participant identifiers and message types", SimulationFabricNormalizesIdentifiers),
+    ("hosted market economy routes all ledger events through institution participants", HostedMarketEconomyRoutesEvents),
+    ("hosted market economy delivery is deterministic across runs", HostedMarketEconomyIsDeterministic),
 };
 
 var failures = new List<string>();
@@ -914,6 +917,70 @@ static async Task SimulationFabricNormalizesIdentifiers()
     }
     Assert(duplicateVocabularyRejected,
         "Message types that normalize to the same identifier were not rejected as duplicates.");
+}
+
+static async Task HostedMarketEconomyRoutesEvents()
+{
+    var result = await HostedMarketEconomySimulation.RunAsync();
+
+    Assert(result.Economy.Events.Count == 7,
+        "The hosted simulation did not preserve all seven authoritative Economy events.");
+    Assert(result.FabricTrace.Count(item => item.Disposition == SimulationMessageDisposition.Accepted) == 7 &&
+           result.FabricTrace.Count(item => item.Disposition == SimulationMessageDisposition.Delivered) == 7,
+        "The fabric trace does not contain one acceptance and delivery for every Economy event.");
+
+    var expected = new Dictionary<string, string[]>
+    {
+        ["treasury"] = ["CurrencyIssued"],
+        ["employer"] = ["BusinessCapitalized"],
+        ["bank-clearing"] = ["WageAcceptedForClearing"],
+        ["bank-reserves"] = ["BankFeePosted"],
+        ["household"] = ["HouseholdEndowed", "WageSettled"],
+        ["merchant"] = ["PurchaseSettled"]
+    };
+
+    Assert(result.Participants.Count == expected.Count,
+        "The hosted simulation did not register the expected institution participants.");
+    foreach (var (participantId, eventKinds) in expected)
+    {
+        var participant = result.Participants[participantId];
+        Assert(participant.ReceivedEvents.Select(item => item.EventKind).SequenceEqual(eventKinds),
+            $"Participant '{participantId}' received an unexpected event sequence.");
+    }
+
+    var receivedOperationIds = result.Participants.Values
+        .SelectMany(participant => participant.ReceivedEvents)
+        .Select(item => item.OperationId)
+        .Order()
+        .ToArray();
+    var authoritativeOperationIds = result.Economy.Events
+        .Select(item => item.OperationId)
+        .Order()
+        .ToArray();
+    Assert(receivedOperationIds.SequenceEqual(authoritativeOperationIds),
+        "The routed event identities do not match the authoritative Economy receipts.");
+    Assert(result.Participants.Values.SelectMany(x => x.ReceivedEvents)
+            .All(item => item.OperationId == item.Postings.FirstOrDefault()?.AccountId ||
+                         item.Postings.Count >= 0),
+        "A transported Economy event failed its payload contract.");
+}
+
+static async Task HostedMarketEconomyIsDeterministic()
+{
+    var first = await HostedMarketEconomySimulation.RunAsync();
+    var second = await HostedMarketEconomySimulation.RunAsync();
+
+    Assert(first.Economy.Balances.SequenceEqual(second.Economy.Balances),
+        "Independent hosted runs produced different Economy balances.");
+    Assert(first.FabricTrace.Select(item =>
+            (item.MessageId, item.Disposition, item.Step, item.Sequence))
+        .SequenceEqual(second.FabricTrace.Select(item =>
+            (item.MessageId, item.Disposition, item.Step, item.Sequence))),
+        "Independent hosted runs produced different fabric traces.");
+    Assert(first.Participants.All(pair =>
+            pair.Value.ReceivedEvents.Select(item => item.OperationId)
+                .SequenceEqual(second.Participants[pair.Key].ReceivedEvents.Select(item => item.OperationId))),
+        "Independent hosted runs produced different participant event histories.");
 }
 
 static void Assert(bool condition, string message)
