@@ -965,7 +965,9 @@ static async Task HostedMarketEconomyRoutesEvents()
                          item.Amount > 0m &&
                          !string.IsNullOrWhiteSpace(item.LedgerOperationKind) &&
                          item.Postings.Count > 0 &&
-                         item.Postings.All(posting => posting.CurrencyId == item.CurrencyId)),
+                         item.Postings.All(posting => posting.CurrencyId == item.CurrencyId) &&
+                         item.Postings.Sum(posting => posting.Delta) ==
+                             (item.LedgerOperationKind == "Issuance" ? item.Amount : 0m)),
         "A transported Economy event failed its payload contract.");
 }
 
