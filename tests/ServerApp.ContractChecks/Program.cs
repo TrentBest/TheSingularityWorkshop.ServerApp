@@ -59,6 +59,9 @@ var checks = new (string Name, Func<Task> Run)[]
     ("swarm participant failure produces an explicit failed outcome", SwarmFaultReportsParticipantFailure),
     ("swarm delayed task expiry produces an explicit incomplete outcome", SwarmFaultReportsExpiredTask),
     ("swarm duplicate task attempt is deduplicated without duplicate work", SwarmFaultDeduplicatesTaskAttempt),
+    ("full swarm reports one failed participant without false completion", FullSwarmReportsParticipantFailure),
+    ("full swarm reports one expired task as incomplete", FullSwarmReportsExpiredTask),
+    ("full swarm deduplicates one task attempt and completes all agents", FullSwarmDeduplicatesTaskAttempt),
 };
 
 var failures = new List<string>();
@@ -1069,6 +1072,57 @@ static async Task SwarmFaultDeduplicatesTaskAttempt()
            result.DeliveredTaskMessages == 1 &&
            result.CoordinatorAcknowledgements == 1,
         "An identical duplicate task attempt caused duplicate work or an incorrect outcome.");
+}
+
+static async Task FullSwarmReportsParticipantFailure()
+{
+    const string target = "group-02-agent-02";
+    var result = await AutonomousSwarmFaultSimulation.RunAsync(
+        SwarmFaultMode.ParticipantHandlerFailure, target);
+    Assert(result.Outcome == SwarmFaultOutcome.Failed &&
+           result.Agents.Count == 12 && result.AssignedTasks == 12 &&
+           result.AcknowledgedTasks == 11 &&
+           result.Agents[target].State == SwarmAgentExecutionState.Failed &&
+           result.Agents.Values.Count(agent => agent.State == SwarmAgentExecutionState.Completed) == 11 &&
+           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 33,
+        "The full swarm did not preserve eleven successful agents and one truthful participant failure.");
+}
+
+static async Task FullSwarmReportsExpiredTask()
+{
+    const string target = "group-02-agent-02";
+    var result = await AutonomousSwarmFaultSimulation.RunAsync(
+        SwarmFaultMode.DelayedTaskExpiry, target);
+    Assert(result.Outcome == SwarmFaultOutcome.Incomplete &&
+           result.Agents.Count == 12 && result.AssignedTasks == 12 &&
+           result.AcknowledgedTasks == 11 &&
+           result.Agents[target].State == SwarmAgentExecutionState.Expired &&
+           result.Agents.Values.Count(agent => agent.State == SwarmAgentExecutionState.Completed) == 11 &&
+           result.Trace.Any(item => item.Disposition == SimulationMessageDisposition.Expired) &&
+           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 33,
+        "The full swarm did not report one expired task and eleven successful acknowledgements.");
+}
+
+static async Task FullSwarmDeduplicatesTaskAttempt()
+{
+    const string target = "group-02-agent-02";
+    var first = await AutonomousSwarmFaultSimulation.RunAsync(
+        SwarmFaultMode.DuplicateTaskAttempt, target);
+    var second = await AutonomousSwarmFaultSimulation.RunAsync(
+        SwarmFaultMode.DuplicateTaskAttempt, target);
+    Assert(first.Outcome == SwarmFaultOutcome.Completed &&
+           first.Agents.Count == 12 && first.AssignedTasks == 12 &&
+           first.AcknowledgedTasks == 12 &&
+           first.Agents.Values.All(agent =>
+               agent.State == SwarmAgentExecutionState.Completed &&
+               agent.RemainingResourceUnits == 2 &&
+               agent.CoordinatorAcknowledged) &&
+           first.Trace.Count(item => item.Disposition == SimulationMessageDisposition.Duplicate) == 1 &&
+           first.TotalInitialResourceUnits == 36 && first.TotalRemainingResourceUnits == 24 &&
+           first.Trace.Select(item => (item.MessageId, item.Disposition, item.Step, item.Sequence))
+               .SequenceEqual(second.Trace.Select(item =>
+                   (item.MessageId, item.Disposition, item.Step, item.Sequence))),
+        "The full swarm did not suppress the duplicate while completing all twelve agents deterministically.");
 }
 
 static void Assert(bool condition, string message)
