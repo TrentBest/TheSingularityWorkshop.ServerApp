@@ -52,9 +52,11 @@ public static class AutonomousSwarmFaultSimulation
         if (!Enum.IsDefined(faultMode))
             throw new ArgumentOutOfRangeException(nameof(faultMode));
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedAgentId);
-        if (!faultedAgentId.StartsWith("group-", StringComparison.Ordinal) ||
-            !faultedAgentId.Contains("-agent-", StringComparison.Ordinal))
-            throw new ArgumentException("The fault target must be a canonical agent ID.", nameof(faultedAgentId));
+        var validTargets = Enumerable.Range(1, 3)
+            .SelectMany(group => Enumerable.Range(1, 4)
+                .Select(agent => $"group-{group:D2}-agent-{agent:D2}"));
+        if (!validTargets.Contains(faultedAgentId, StringComparer.Ordinal))
+            throw new ArgumentException("The fault target must identify one of the twelve registered agents.", nameof(faultedAgentId));
         cancellationToken.ThrowIfCancellationRequested();
 
         var fabric = new SimulationMessageFabric(RunId);
@@ -102,10 +104,8 @@ public static class AutonomousSwarmFaultSimulation
                 trace, faultMode, faultedAgentId),
             StringComparer.Ordinal);
 
-        var assigned = trace.Count(item => item.Disposition == SimulationMessageDisposition.Accepted &&
-            item.Detail.Contains("task", StringComparison.OrdinalIgnoreCase));
-        // Assignment count is the number of unique task envelopes accepted, not acknowledgements.
-        assigned = agents.Count;
+        // Assignment count is the number of host-issued task envelopes, not acknowledgements.
+        var assigned = agents.Count;
         var acknowledged = coordinator.AcknowledgedAgents.Count;
         var initialResources = agents.Count * AutonomousSwarmSimulation.InitialAgentResourceUnits;
         var remainingResources = snapshots.Values.Sum(agent => agent.RemainingResourceUnits);
@@ -238,10 +238,6 @@ public static class AutonomousSwarmFaultSimulation
             SwarmFaultMode mode,
             string target)
         {
-            var taskTrace = trace.Where(item =>
-                item.Disposition is SimulationMessageDisposition.Delivered or
-                    SimulationMessageDisposition.Failed or SimulationMessageDisposition.Expired)
-                .ToArray();
             var expired = mode == SwarmFaultMode.DelayedTaskExpiry && ParticipantId == target &&
                 trace.Any(item => item.Disposition == SimulationMessageDisposition.Expired);
             var state = _failed ? SwarmAgentExecutionState.Failed
