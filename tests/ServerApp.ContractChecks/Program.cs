@@ -43,6 +43,12 @@ var checks = new (string Name, Func<Task> Run)[]
     ("game session stop records Aborted after adapter shutdown", GameSessionStopRecordsAborted),
     ("game session rejects duplicate match starts", GameSessionRejectsDuplicateStarts),
     ("cancelled game-session startup leaves an Aborted record", GameSessionCancellationLeavesAborted),
+    ("simulation fabric delivers messages in deterministic step and enqueue order", SimulationFabricDeliversInOrder),
+    ("simulation fabric deduplicates identical IDs and rejects changed payloads", SimulationFabricDeduplicatesMessages),
+    ("simulation fabric expires messages before delivery", SimulationFabricExpiresMessages),
+    ("simulation fabric rejects unknown participants and unsupported message types", SimulationFabricRejectsUnknownAndUnsupportedMessages),
+    ("simulation fabric isolates participant handler failures", SimulationFabricIsolatesHandlerFailures),
+    ("simulation fabric rejects virtual-time regression", SimulationFabricRejectsTimeRegression),
 };
 
 var failures = new List<string>();
@@ -730,9 +736,163 @@ static async Task GameSessionCancellationLeavesAborted()
     }
 }
 
+static async Task SimulationFabricDeliversInOrder()
+{
+    var participant = new TestSimulationMessageParticipant("household-1", "household",
+        ["economy.wage", "economy.purchase"]);
+    var fabric = new SimulationMessageFabric("market-run");
+    fabric.Register(new TestSimulationMessageParticipant("business-1", "business", ["economy.command"]));
+    fabric.Register(participant);
+
+    var firstId = Guid.Parse("50000000-0000-0000-0000-000000000001");
+    var secondId = Guid.Parse("50000000-0000-0000-0000-000000000002");
+    Assert(fabric.Enqueue(new SimulationMessageEnvelope(firstId, "market-run", "business-1",
+        "household-1", "economy.wage", 1, 2, 10, "wage-1")).Disposition ==
+        SimulationMessageDisposition.Accepted, "The first message was not accepted.");
+    Assert(fabric.Enqueue(new SimulationMessageEnvelope(secondId, "market-run", "business-1",
+        "household-1", "economy.purchase", 1, 2, 10, "purchase-1")).Disposition ==
+        SimulationMessageDisposition.Accepted, "The second message was not accepted.");
+
+    var early = await fabric.AdvanceToAsync(1);
+    Assert(early.Count == 0 && participant.Received.Count == 0,
+        "A message was delivered before its virtual delivery step.");
+
+    var delivered = await fabric.AdvanceToAsync(2);
+    Assert(delivered.Count == 2 &&
+           delivered.All(item => item.Disposition == SimulationMessageDisposition.Delivered) &&
+           participant.Received.SequenceEqual([firstId, secondId]),
+        "Messages were not delivered in deterministic enqueue order.");
+}
+
+static async Task SimulationFabricDeduplicatesMessages()
+{
+    var sender = new TestSimulationMessageParticipant("sender", "business", ["economy.command"]);
+    var recipient = new TestSimulationMessageParticipant("recipient", "household", ["economy.wage"]);
+    var fabric = new SimulationMessageFabric("run-1");
+    fabric.Register(sender);
+    fabric.Register(recipient);
+    var id = Guid.Parse("50000000-0000-0000-0000-000000000003");
+    var original = new SimulationMessageEnvelope(id, "run-1", "sender", "recipient",
+        "economy.wage", 1, 1, 10, "payload");
+
+    Assert(fabric.Enqueue(original).Disposition == SimulationMessageDisposition.Accepted,
+        "The original message was not accepted.");
+    Assert(fabric.Enqueue(original).Disposition == SimulationMessageDisposition.Duplicate,
+        "An identical message retry was not recognized as a duplicate.");
+    var changed = new SimulationMessageEnvelope(id, "run-1", "sender", "recipient",
+        "economy.wage", 1, 1, 10, "changed");
+    Assert(fabric.Enqueue(changed).Disposition == SimulationMessageDisposition.Rejected,
+        "A reused message ID with changed content was not rejected.");
+
+    await fabric.AdvanceToAsync(1);
+    Assert(recipient.Received.SequenceEqual([id]),
+        "A duplicate message was delivered more than once.");
+}
+
+static async Task SimulationFabricExpiresMessages()
+{
+    var sender = new TestSimulationMessageParticipant("sender", "business", ["economy.command"]);
+    var recipient = new TestSimulationMessageParticipant("recipient", "household", ["economy.wage"]);
+    var fabric = new SimulationMessageFabric("run-1");
+    fabric.Register(sender);
+    fabric.Register(recipient);
+    var id = Guid.NewGuid();
+    fabric.Enqueue(new SimulationMessageEnvelope(id, "run-1", "sender", "recipient",
+        "economy.wage", 1, 1, 2, "expired"));
+
+    var trace = await fabric.AdvanceToAsync(2);
+    Assert(trace.Count == 1 && trace[0].Disposition == SimulationMessageDisposition.Expired &&
+           recipient.Received.Count == 0,
+        "An expired message reached its recipient.");
+}
+
+static async Task SimulationFabricRejectsUnknownAndUnsupportedMessages()
+{
+    var sender = new TestSimulationMessageParticipant("sender", "business", ["economy.command"]);
+    var recipient = new TestSimulationMessageParticipant("recipient", "household", ["economy.wage"]);
+    var fabric = new SimulationMessageFabric("run-1");
+    fabric.Register(sender);
+    fabric.Register(recipient);
+
+    var unknownSender = fabric.Enqueue(new SimulationMessageEnvelope(Guid.NewGuid(), "run-1",
+        "unknown", "recipient", "economy.wage", 1, 1, 10, "payload"));
+    Assert(unknownSender.Disposition == SimulationMessageDisposition.Rejected,
+        "A message from an unknown participant was accepted.");
+
+    var unsupported = fabric.Enqueue(new SimulationMessageEnvelope(Guid.NewGuid(), "run-1",
+        "sender", "recipient", "economy.admin", 1, 1, 10, "payload"));
+    Assert(unsupported.Disposition == SimulationMessageDisposition.Accepted,
+        "A routable message should be queued before recipient vocabulary validation.");
+    var delivered = await fabric.AdvanceToAsync(1);
+    Assert(delivered.Single().Disposition == SimulationMessageDisposition.Rejected &&
+           recipient.Received.Count == 0,
+        "The recipient received a message outside its declared vocabulary.");
+}
+
+static async Task SimulationFabricIsolatesHandlerFailures()
+{
+    var failing = new TestSimulationMessageParticipant("failing", "business", ["economy.command"])
+    {
+        Handler = (_, _) => ValueTask.FromException(new InvalidOperationException("fixture failure"))
+    };
+    var succeeding = new TestSimulationMessageParticipant("succeeding", "household", ["economy.wage"]);
+    var sender = new TestSimulationMessageParticipant("sender", "issuer", ["economy.command"]);
+    var fabric = new SimulationMessageFabric("run-1");
+    fabric.Register(sender);
+    fabric.Register(failing);
+    fabric.Register(succeeding);
+
+    fabric.Enqueue(new SimulationMessageEnvelope(Guid.NewGuid(), "run-1", "sender", "failing",
+        "economy.command", 1, 1, 10, "fail"));
+    fabric.Enqueue(new SimulationMessageEnvelope(Guid.NewGuid(), "run-1", "sender", "succeeding",
+        "economy.wage", 1, 1, 10, "succeed"));
+
+    var trace = await fabric.AdvanceToAsync(1);
+    Assert(trace.Count == 2 &&
+           trace[0].Disposition == SimulationMessageDisposition.Failed &&
+           trace[1].Disposition == SimulationMessageDisposition.Delivered &&
+           succeeding.Received.Count == 1,
+        "A handler failure prevented later independent delivery.");
+}
+
+static async Task SimulationFabricRejectsTimeRegression()
+{
+    var fabric = new SimulationMessageFabric("run-1");
+    await fabric.AdvanceToAsync(2);
+    try
+    {
+        await fabric.AdvanceToAsync(1);
+        throw new InvalidOperationException("The simulation fabric accepted backwards virtual time.");
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+    }
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
+}
+
+sealed class TestSimulationMessageParticipant(
+    string participantId,
+    string roleId,
+    IReadOnlyCollection<string> acceptedMessageTypes) : ISimulationMessageParticipant
+{
+    public string ParticipantId => participantId;
+    public string RoleId => roleId;
+    public IReadOnlyCollection<string> AcceptedMessageTypes => acceptedMessageTypes;
+    public List<Guid> Received { get; } = [];
+    public Func<SimulationMessageEnvelope, CancellationToken, ValueTask>? Handler { get; init; }
+
+    public ValueTask ReceiveAsync(
+        SimulationMessageEnvelope message,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Received.Add(message.MessageId);
+        return Handler?.Invoke(message, cancellationToken) ?? ValueTask.CompletedTask;
+    }
 }
 
 sealed class ReadyAdapter(string roleId) : IServerRoleAdapter
