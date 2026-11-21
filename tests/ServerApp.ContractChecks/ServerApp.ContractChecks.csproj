@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/ServerApp.Core/ServerApp.Core.csproj" />
+    <ProjectReference Include="../../src/ServerApp.Economy/ServerApp.Economy.csproj" />
     <ProjectReference Include="../../src/ServerApp.DataWarehouse/ServerApp.DataWarehouse.csproj" />
   </ItemGroup>
 </Project>
