@@ -56,6 +56,9 @@ var checks = new (string Name, Func<Task> Run)[]
     ("hosted market economy delivery is deterministic across runs", HostedMarketEconomyIsDeterministic),
     ("benign swarm partitions bounded agents and conserves virtual resources", SwarmSimulationPartitionsAndAccounts),
     ("benign swarm replay is deterministic and rejects unbounded dimensions", SwarmSimulationIsDeterministicAndBounded),
+    ("swarm participant failure produces an explicit failed outcome", SwarmFaultReportsParticipantFailure),
+    ("swarm delayed task expiry produces an explicit incomplete outcome", SwarmFaultReportsExpiredTask),
+    ("swarm duplicate task attempt is deduplicated without duplicate work", SwarmFaultDeduplicatesTaskAttempt),
 };
 
 var failures = new List<string>();
@@ -1033,6 +1036,39 @@ static async Task SwarmSimulationIsDeterministicAndBounded()
     catch (ArgumentOutOfRangeException)
     {
     }
+}
+
+static async Task SwarmFaultReportsParticipantFailure()
+{
+    var result = await SwarmFaultInjectionSimulation.RunAsync(SwarmFaultMode.ParticipantHandlerFailure);
+    Assert(result.Outcome == SwarmFaultOutcome.Failed &&
+           result.AcceptedTaskMessages == 1 &&
+           result.FailedTaskMessages == 1 &&
+           result.DeliveredTaskMessages == 0 &&
+           result.CoordinatorAcknowledgements == 0,
+        "A participant handler failure was not reported as failed without an acknowledgement.");
+}
+
+static async Task SwarmFaultReportsExpiredTask()
+{
+    var result = await SwarmFaultInjectionSimulation.RunAsync(SwarmFaultMode.DelayedTaskExpiry);
+    Assert(result.Outcome == SwarmFaultOutcome.Incomplete &&
+           result.AcceptedTaskMessages == 1 &&
+           result.ExpiredTaskMessages == 1 &&
+           result.DeliveredTaskMessages == 0 &&
+           result.CoordinatorAcknowledgements == 0,
+        "An expired delayed task was not reported as incomplete without an acknowledgement.");
+}
+
+static async Task SwarmFaultDeduplicatesTaskAttempt()
+{
+    var result = await SwarmFaultInjectionSimulation.RunAsync(SwarmFaultMode.DuplicateTaskAttempt);
+    Assert(result.Outcome == SwarmFaultOutcome.Completed &&
+           result.AcceptedTaskMessages == 1 &&
+           result.DuplicateTaskMessages == 1 &&
+           result.DeliveredTaskMessages == 1 &&
+           result.CoordinatorAcknowledgements == 1,
+        "An identical duplicate task attempt caused duplicate work or an incorrect outcome.");
 }
 
 static void Assert(bool condition, string message)
