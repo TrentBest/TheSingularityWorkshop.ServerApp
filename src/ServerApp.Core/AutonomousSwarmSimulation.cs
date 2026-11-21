@@ -116,8 +116,9 @@ public static class AutonomousSwarmSimulation
         var initialResources = checked(agentSnapshots.Count * InitialAgentResourceUnits);
         var remainingResources = agentSnapshots.Values.Sum(agent => agent.RemainingResourceUnits);
 
-        if (assigned != agents.Count || acknowledged != assigned)
-            throw new InvalidOperationException("The swarm run did not complete every assigned virtual task.");
+        if (assigned != agents.Count || acknowledged != assigned ||
+            coordinator.AcknowledgedAgents.Count != assigned)
+            throw new InvalidOperationException("The swarm run did not complete every assigned virtual task and coordinator acknowledgement.");
         if (remainingResources != initialResources - assigned)
             throw new InvalidOperationException("The swarm resource accounting invariant failed.");
 
