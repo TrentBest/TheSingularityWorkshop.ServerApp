@@ -2,9 +2,9 @@
 
 ## Status
 
-The first deterministic virtual coordination slice is implemented on `development`. It uses the existing `ServerApp.Core.SimulationMessageFabric`; it does not introduce a second queue or execution authority.
+The first deterministic virtual coordination slice and its first fault-injection harness are implemented on `development`. Both use the existing `ServerApp.Core.SimulationMessageFabric`; neither introduces a second queue or execution authority.
 
-## Scenario
+## Normal scenario
 
 `ServerApp.Simulation.AutonomousSwarmSimulation.RunAsync()` creates a bounded world of virtual survey agents:
 
@@ -16,7 +16,21 @@ The first deterministic virtual coordination slice is implemented on `developmen
 - A fixed per-agent resource budget; one unit is consumed per assigned survey task
 - Immutable result snapshots and a fabric trace
 
-The default scenario contains 3 sub-swarms and 12 agents. Each agent receives one harmless virtual survey-cell task and acknowledges it. The run checks that all assignments are acknowledged by the coordinator and that resource accounting is conserved.
+The default scenario contains 3 sub-swarms and 12 agents. Each agent receives one harmless virtual survey-cell task and acknowledges it. The run checks that all assignments are acknowledged by the coordinator and that resource accounting is conserved. A violated invariant throws rather than returning a false success.
+
+## Fault-injection scenario
+
+`ServerApp.Simulation.SwarmFaultInjectionSimulation.RunAsync(mode)` runs one bounded virtual task under a selected deterministic fault:
+
+| Fault mode | Expected outcome | Evidence |
+|---|---|---|
+| `ParticipantHandlerFailure` | `Failed` | Fabric records a failed handler; no coordinator acknowledgement |
+| `DelayedTaskExpiry` | `Incomplete` | Task reaches its expiry step before delivery; no acknowledgement |
+| `DuplicateTaskAttempt` | `Completed` | Same message ID and content is recorded as duplicate; one delivery and one acknowledgement |
+
+The result reports a terminal outcome plus accepted, duplicate, delivered, expired, and failed task-message counts, coordinator acknowledgement count, and the immutable fabric trace. The duplicate case demonstrates idempotent enqueue suppression, not exactly-once processing. The failure and expiry cases do not retry, fabricate acknowledgements, or claim completion.
+
+These are deliberately narrow deterministic fault proofs. They do not yet provide automatic recovery, retry policy, participant restart, partial-world continuation, or a general-purpose failure scheduler.
 
 ## Authority and safety boundaries
 
@@ -24,12 +38,15 @@ This is a simulation of software participants only. The task is a virtual survey
 
 The host defines and registers every participant and its accepted message vocabulary. The message fabric transports messages; it does not grant authority. Agent state is owned by each agent participant. Sub-swarm participants may assign only the fixed benign task shape to their pre-registered agents. The coordinator observes acknowledgements; it does not execute agent instructions.
 
+Capability discovery may identify a gap, but it must remain a proposal. Any future specialist-role activation requires a separate host-controlled human approval checkpoint and explicit bounded role definition; a detected gap must never activate a role by itself.
+
 ## Verification
 
-The contract checks cover the default bounded partition, exact task and acknowledgement counts, resource accounting, deterministic replay, and rejection of dimensions above configured limits.
+The contract checks cover:
+
+- Default bounded partition, exact task and acknowledgement counts, resource accounting, deterministic replay, and rejection of dimensions above configured limits
+- Injected participant-handler failure reported as `Failed`, with no acknowledgement
+- Delayed task expiry reported as `Incomplete`, with no acknowledgement
+- Identical duplicate task attempt suppressed, with one delivery and one acknowledgement
 
 The underlying fabric remains process-local, volatile, single-host, and sequential. This proof does not establish durable messaging, cross-process coordination, broker failover, or production distributed operation.
-
-## Next evidence
-
-Further work should add explicit failure injection (participant failure, delayed/expired messages, duplicate task attempts), inspectable recovery/failure outcomes, capability-gap proposals, and a separate human approval checkpoint for any specialist-role activation. Those capabilities must remain fail-closed; a discovered capability gap must never activate a role by itself.
