@@ -1,6 +1,6 @@
 # Deterministic Simulation Message Fabric
 
-**Maturity: source-implemented; CI contract checks passed on the current development revision.** The first ServerApp simulation transport is an in-process, deterministic message fabric intended for local proofs and simulations. It is not a distributed broker or production transport.
+**Maturity: source-implemented; CI contract checks passed on commit `5d1a1680a45dad0fc0705e5a97f18adf4e59437f`.** The first ServerApp simulation transport is an in-process, deterministic message fabric intended for local proofs and simulations. It is not a distributed broker or production transport.
 
 ## Contract
 
