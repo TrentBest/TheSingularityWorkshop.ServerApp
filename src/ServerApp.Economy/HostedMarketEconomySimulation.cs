@@ -86,10 +86,7 @@ public static class HostedMarketEconomySimulation
                 economy.Currency.Symbol,
                 item.OccurredAt,
                 item.LedgerReceipt.Kind.ToString(),
-                Array.AsReadOnly((item.LedgerReceipt.Postings ?? Array.Empty<SimulationLedgerPosting>())
-                    .Select(posting => new MarketEconomyPostingMessage(
-                        posting.AccountId, posting.CurrencyId.Value, posting.Delta))
-                    .ToArray()));
+                BuildPostingProjection(item, economy.Currency.Id));
 
             var payload = JsonSerializer.Serialize(projection, JsonOptions);
             var deliveryStep = checked(++step);
@@ -126,6 +123,28 @@ public static class HostedMarketEconomySimulation
             economy,
             new ReadOnlyDictionary<string, MarketEconomyParticipantSnapshot>(snapshots),
             fabric.Trace);
+    }
+
+    private static IReadOnlyList<MarketEconomyPostingMessage> BuildPostingProjection(
+        MarketEconomyScenarioEvent item,
+        SimulatedCurrencyId currencyId)
+    {
+        var postings = new List<MarketEconomyPostingMessage>();
+        if (item.LedgerReceipt.FromAccountId is Guid fromAccountId)
+            postings.Add(new MarketEconomyPostingMessage(fromAccountId, currencyId.Value, -item.Amount.Value));
+        if (item.LedgerReceipt.ToAccountId is Guid toAccountId)
+            postings.Add(new MarketEconomyPostingMessage(toAccountId, currencyId.Value, item.Amount.Value));
+        if (postings.Count == 0)
+            throw new InvalidOperationException("The Economy receipt has no account endpoints to project.");
+
+        // Issuance is intentionally one-sided; transfers are balanced between two accounts.
+        var expectedNet = item.LedgerReceipt.Kind == SimulationLedgerOperationKind.Issuance
+            ? item.Amount.Value
+            : 0m;
+        if (postings.Sum(posting => posting.Delta) != expectedNet)
+            throw new InvalidOperationException("The transport posting projection does not match the ledger operation kind.");
+
+        return Array.AsReadOnly(postings.ToArray());
     }
 
     private static string ResolveRecipient(MarketEconomyEventKind kind) => kind switch
