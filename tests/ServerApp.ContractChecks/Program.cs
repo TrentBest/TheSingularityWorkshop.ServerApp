@@ -1,5 +1,6 @@
 using ServerApp.Core;
 using ServerApp.Economy;
+using ServerApp.Simulation;
 
 var checks = new (string Name, Func<Task> Run)[]
 {
@@ -53,6 +54,8 @@ var checks = new (string Name, Func<Task> Run)[]
     ("simulation fabric normalizes participant identifiers and message types", SimulationFabricNormalizesIdentifiers),
     ("hosted market economy routes all ledger events through institution participants", HostedMarketEconomyRoutesEvents),
     ("hosted market economy delivery is deterministic across runs", HostedMarketEconomyIsDeterministic),
+    ("benign swarm partitions bounded agents and conserves virtual resources", SwarmSimulationPartitionsAndAccounts),
+    ("benign swarm replay is deterministic and rejects unbounded dimensions", SwarmSimulationIsDeterministicAndBounded),
 };
 
 var failures = new List<string>();
@@ -990,6 +993,48 @@ static async Task HostedMarketEconomyIsDeterministic()
         "Independent hosted runs produced different participant event histories.");
 }
 
+static async Task SwarmSimulationPartitionsAndAccounts()
+{
+    var result = await AutonomousSwarmSimulation.RunAsync();
+    Assert(result.Groups.Count == 3 && result.Agents.Count == 12 &&
+           result.AssignedTasks == 12 && result.AcknowledgedTasks == 12,
+        "The swarm did not partition and acknowledge all twelve bounded virtual survey tasks.");
+    Assert(result.Trace.Count(item => item.Disposition == SimulationMessageDisposition.Accepted) == 27 &&
+           result.Trace.Count(item => item.Disposition == SimulationMessageDisposition.Delivered) == 27,
+        "The fabric trace does not show acceptance and delivery for all group, task, and acknowledgement messages.");
+    Assert(result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 24 &&
+           result.Agents.Values.All(agent => agent.RemainingResourceUnits == 2 && agent.Acknowledged),
+        "The swarm did not conserve its declared per-agent resource accounting.");
+    Assert(result.Groups.Values.All(group => group.AssignedTaskCount == 4 && group.AcknowledgedTaskCount == 4),
+        "A sub-swarm did not retain the expected bounded assignment and acknowledgement counts.");
+}
+
+static async Task SwarmSimulationIsDeterministicAndBounded()
+{
+    var first = await AutonomousSwarmSimulation.RunAsync(2, 3);
+    var second = await AutonomousSwarmSimulation.RunAsync(2, 3);
+    Assert(first.Agents.Keys.Order().SequenceEqual(second.Agents.Keys.Order()) &&
+           first.Trace.Select(item => (item.MessageId, item.Disposition, item.Step, item.Sequence))
+               .SequenceEqual(second.Trace.Select(item => (item.MessageId, item.Disposition, item.Step, item.Sequence))),
+        "Independent swarm runs did not produce identical agent identities and fabric traces.");
+    try
+    {
+        await AutonomousSwarmSimulation.RunAsync(AutonomousSwarmSimulation.MaximumGroups + 1, 1);
+        throw new InvalidOperationException("The swarm accepted more than its maximum group count.");
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+    }
+    try
+    {
+        await AutonomousSwarmSimulation.RunAsync(1, AutonomousSwarmSimulation.MaximumAgentsPerGroup + 1);
+        throw new InvalidOperationException("The swarm accepted more than its maximum agents per group.");
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+    }
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
@@ -1103,5 +1148,4 @@ sealed class TestBotBuildCatalog(
             builds.TryGetValue((botIdentityId, buildId), out var registration) ? registration : null);
     }
 }
-
 
