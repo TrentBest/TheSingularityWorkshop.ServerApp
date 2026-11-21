@@ -4,6 +4,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerApp.Core", "src\ServerApp.Core\ServerApp.Core.csproj", "{7B17B67A-31DA-4C9E-A87A-EDCD73A4A101}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerApp.Economy", "src\ServerApp.Economy\ServerApp.Economy.csproj", "{7B17B67A-31DA-4C9E-A87A-EDCD73A4A105}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerApp.Cli", "src\ServerApp.Cli\ServerApp.Cli.csproj", "{7B17B67A-31DA-4C9E-A87A-EDCD73A4A102}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerApp.MachineReport", "src\ServerApp.MachineReport\ServerApp.MachineReport.csproj", "{7B17B67A-31DA-4C9E-A87A-EDCD73A4A103}"
@@ -32,6 +34,10 @@ Global
 		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A104}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A104}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A105}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A105}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A105}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B17B67A-31DA-4C9E-A87A-EDCD73A4A105}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
