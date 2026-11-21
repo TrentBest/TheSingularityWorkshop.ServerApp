@@ -25,7 +25,7 @@ The initial closed scenario emits seven deterministic ledger events. Each event 
 | BankFeePosted | bank-reserves |
 | PurchaseSettled | merchant |
 
-The message ID is the Economy operation ID. The envelope uses run ID `market-economy-reference-v1`, message type `economy.ledger-event`, schema version 1, and monotonically increasing virtual delivery steps. Payloads carry the event kind, amount/currency identity, timestamp, ledger operation kind, and signed ledger postings.
+The message ID is the Economy operation ID. The envelope uses run ID `market-economy-reference-v1`, message type `economy.ledger-event`, schema version 1, and monotonically increasing virtual delivery steps. Payloads carry the event kind, amount/currency identity, timestamp, ledger operation kind, and signed posting projections derived from the receipt's source/destination account IDs. Issuance is represented as a one-sided positive posting; transfers are represented as balanced negative/positive postings.
 
 Each participant validates the schema and operation/message identity before recording the received projection. The result includes the original Economy scenario result, immutable participant snapshots, and the fabric trace.
 
