@@ -6,6 +6,7 @@
 - [Fleet Observatory](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) — static evidence and architecture surface; not a live fleet dashboard.
 - [README](README.md) — project orientation and current maturity.
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server-role taxonomy, manifest-driven provisioning, and proof sequence.
+- [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — in-process message ordering, expiry, duplicate handling, failure isolation, evidence, and limits.
 - [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — the Foundry → FSM_COS → role-adapter workflow, pinned source dependencies, and proof boundaries.
 - [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) — proposed boundaries, ownership, trust model, match-format progression, and evidence gates.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — product vision captured 2026-11-01, including landing experiences, service roles, authentication flow, elastic Experience compute, and Renderer.
