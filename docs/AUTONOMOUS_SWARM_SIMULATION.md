@@ -32,6 +32,20 @@ The result reports a terminal outcome plus accepted, duplicate, delivered, expir
 
 These are deliberately narrow deterministic fault proofs. They do not yet provide automatic recovery, retry policy, participant restart, partial-world continuation, or a general-purpose failure scheduler.
 
+## Full-hierarchy fault injection
+
+`ServerApp.Simulation.AutonomousSwarmFaultSimulation.RunAsync(mode, faultedAgentId)` applies one deterministic fault inside the same bounded 3-group/12-agent message hierarchy. The default target is `group-02-agent-02`; only one of the twelve registered agent IDs is accepted.
+
+| Fault mode | Full-swarm outcome | Coordinator evidence |
+|---|---|---|
+| `ParticipantHandlerFailure` | `Failed` | 11 of 12 agents acknowledge; the target participant handler is recorded as failed |
+| `DelayedTaskExpiry` | `Incomplete` | 11 of 12 agents acknowledge; the target task expires before delivery |
+| `DuplicateTaskAttempt` | `Completed` | All 12 agents acknowledge; the identical duplicate is suppressed before a second delivery |
+
+The immutable result includes every agent's terminal state, remaining resource units, coordinator acknowledgement, the complete fabric trace, and aggregate assignment/acknowledgement/resource counts. The host declares `Completed` only when the coordinator has evidence for all twelve unique agent acknowledgements. A handler failure is terminally `Failed`; an expired task is `Incomplete`. Neither is retried and neither receives a fabricated acknowledgement.
+
+The normal all-success path remains available through `AutonomousSwarmSimulation.RunAsync()`. This fault-injection entry point is a deterministic reliability proof over the same message fabric and hierarchical participant topology, not a production scheduler or recovery policy. Duplicate suppression is enqueue idempotency, not exactly-once execution.
+
 ## Authority and safety boundaries
 
 This is a simulation of software participants only. The task is a virtual survey-cell label; it does not represent navigation, sensing, target selection, physical movement, or actuation. There is no hardware adapter, network transport, arbitrary command execution, dynamic code loading, or external side effect.
