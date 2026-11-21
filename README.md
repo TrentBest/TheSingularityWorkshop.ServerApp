@@ -141,3 +141,4 @@ The first local provisioning path remains a source-backed host proof. The next e
 
 - [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — process-local, virtual-time message routing with explicit identity and delivery traces.
 - [Hosted Market-Economy Simulation](docs/HOSTED_MARKET_ECONOMY_SIMULATION.md) — the Economy reference ledger scenario routed to ServerApp institution participants. This is an in-process simulation proof, not a live financial system.
+- [Autonomous Swarm Simulation](docs/AUTONOMOUS_SWARM_SIMULATION.md) — bounded, deterministic coordination of benign virtual survey agents; no physical device control or actuation.
