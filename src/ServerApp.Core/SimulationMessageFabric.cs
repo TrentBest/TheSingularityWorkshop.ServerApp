@@ -122,24 +122,31 @@ public sealed class SimulationMessageFabric
     public void Register(ISimulationMessageParticipant participant)
     {
         ArgumentNullException.ThrowIfNull(participant);
-        RequireIdentifier(participant.ParticipantId, nameof(participant.ParticipantId));
-        RequireIdentifier(participant.RoleId, nameof(participant.RoleId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(participant.ParticipantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(participant.RoleId);
         ArgumentNullException.ThrowIfNull(participant.AcceptedMessageTypes);
 
+        var participantId = participant.ParticipantId.Trim();
+        var roleId = participant.RoleId.Trim();
+        RequireIdentifier(participantId, nameof(participant.ParticipantId));
+        RequireIdentifier(roleId, nameof(participant.RoleId));
+
         var acceptedTypes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var messageType in participant.AcceptedMessageTypes)
+        foreach (var declaredType in participant.AcceptedMessageTypes)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(declaredType);
+            var messageType = declaredType.Trim();
             RequireIdentifier(messageType, nameof(participant.AcceptedMessageTypes));
             if (!acceptedTypes.Add(messageType))
                 throw new ArgumentException(
-                    $"Participant '{participant.ParticipantId}' declares duplicate message type '{messageType}'.",
+                    $"Participant '{participantId}' declares duplicate message type '{messageType}'.",
                     nameof(participant));
         }
 
-        if (!_participants.TryAdd(participant.ParticipantId,
+        if (!_participants.TryAdd(participantId,
                 new ParticipantRegistration(participant, acceptedTypes)))
             throw new InvalidOperationException(
-                $"Simulation participant '{participant.ParticipantId}' is already registered.");
+                $"Simulation participant '{participantId}' is already registered.");
     }
 
     /// <summary>
