@@ -1084,7 +1084,9 @@ static async Task FullSwarmReportsParticipantFailure()
            result.AcknowledgedTasks == 11 &&
            result.Agents[target].State == SwarmAgentExecutionState.Failed &&
            result.Agents.Values.Count(agent => agent.State == SwarmAgentExecutionState.Completed) == 11 &&
-           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 33,
+           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 25 &&
+           result.Agents[target].RemainingResourceUnits == 3 &&
+           result.Agents[target].AssignedTask == "survey-cell:group-02:02",
         "The full swarm did not preserve eleven successful agents and one truthful participant failure.");
 }
 
@@ -1099,7 +1101,9 @@ static async Task FullSwarmReportsExpiredTask()
            result.Agents[target].State == SwarmAgentExecutionState.Expired &&
            result.Agents.Values.Count(agent => agent.State == SwarmAgentExecutionState.Completed) == 11 &&
            result.Trace.Any(item => item.Disposition == SimulationMessageDisposition.Expired) &&
-           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 33,
+           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 25 &&
+           result.Agents[target].RemainingResourceUnits == 3 &&
+           result.Agents[target].AssignedTask == "survey-cell:group-02:02",
         "The full swarm did not report one expired task and eleven successful acknowledgements.");
 }
 
