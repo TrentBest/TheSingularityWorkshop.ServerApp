@@ -21,3 +21,4 @@
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
 
 - [Hosted Market-Economy Simulation](docs/HOSTED_MARKET_ECONOMY_SIMULATION.md) — Economy-owned ledger events routed through ServerApp's deterministic simulation fabric.
+- [Autonomous Swarm Simulation](docs/AUTONOMOUS_SWARM_SIMULATION.md) — bounded virtual-agent coordination, task acknowledgements, resource accounting, deterministic replay, and safety boundaries.
