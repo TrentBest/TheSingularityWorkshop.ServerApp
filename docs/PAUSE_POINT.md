@@ -3,6 +3,18 @@
 
 # ServerApp Pause Point
 
+## Current checkpoint — 2026-11-21
+
+- The owner explicitly authorized moving the theoretical financial market and autonomous-swarm demonstrations toward executable simulation.
+- Current first proving path: deterministic multi-institution market economy, then reuse the same bounded participant/message contracts for a simulated autonomous swarm.
+- ServerApp issue [#15](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/15) tracks the shared simulation participant/message-fabric foundation.
+- Economy issue [#30](https://github.com/TrentBest/TheSingularityWorkshop.Economy/issues/30) tracks the deterministic multi-institution market simulation.
+- ServerApp now has source for `src/ServerApp.Core/SimulationMessageFabric.cs`: host-registered participants, finite accepted-message vocabularies, run-scoped envelopes, deterministic virtual-step/enqueue ordering, expiry, duplicate-ID handling, handler-failure isolation, and trace evidence. It is process-local, volatile, single-host, sequential, and not a distributed broker. Six new contract checks are present; CI verification is pending.
+- Economy now has source for `MarketEconomyScenario.Run()`, using the existing `SimulationLedger` for a fictional central-bank treasury, commercial-bank clearing/reserves, employer, household deposit, and merchant. Five scenario tests and a guide are present; CI verification is pending. The first scenario does not implement lending, deposit creation, securities, or external settlement.
+- Ownership remains explicit: Economy owns economic meaning and ledger semantics; ServerApp owns participant hosting and coordination; FSM_COS composes; FSM_Foundry executes host-authored workflows; CiAi is the development/research plane, not runtime authority.
+- Branch inventory currently includes `development`, `master`, and the pre-existing `work/candidate-scoped-composition-sessions` branch associated with PR #3. Do not delete that branch while its PR work remains unresolved. The permanent target remains exactly `master` and `development`.
+- No NuGet publication, public endpoint exposure, production deployment, merge to `master`, release, or branch deletion is authorized by this checkpoint. The new authorization covers building and validating the simulation capabilities, not claiming production readiness.
+
 ## Current checkpoint — 2026-11-12
 
 - Repository: [TheSingularityWorkshop.ServerApp](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp).
