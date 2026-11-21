@@ -115,13 +115,11 @@ public static class AutonomousSwarmFaultSimulation
             remainingResources > initialResources)
             throw new InvalidOperationException("The fault-injected swarm violated its aggregate accounting bounds.");
 
-        var outcome = faultMode switch
-        {
-            SwarmFaultMode.ParticipantHandlerFailure => SwarmFaultOutcome.Failed,
-            SwarmFaultMode.DelayedTaskExpiry => SwarmFaultOutcome.Incomplete,
-            SwarmFaultMode.DuplicateTaskAttempt => SwarmFaultOutcome.Completed,
-            _ => throw new ArgumentOutOfRangeException(nameof(faultMode))
-        };
+        var outcome = acknowledged == assigned
+            ? SwarmFaultOutcome.Completed
+            : snapshots.Values.Any(agent => agent.State == SwarmAgentExecutionState.Failed)
+                ? SwarmFaultOutcome.Failed
+                : SwarmFaultOutcome.Incomplete;
         if ((outcome == SwarmFaultOutcome.Completed) != (acknowledged == assigned))
             throw new InvalidOperationException("The coordinator completion decision disagrees with acknowledgement evidence.");
         if (outcome != SwarmFaultOutcome.Completed && acknowledged != assigned - 1)
