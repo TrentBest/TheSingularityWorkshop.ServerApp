@@ -19,3 +19,5 @@
 
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop" width="200" /></p>
+
+- [Hosted Market-Economy Simulation](docs/HOSTED_MARKET_ECONOMY_SIMULATION.md) — Economy-owned ledger events routed through ServerApp's deterministic simulation fabric.
