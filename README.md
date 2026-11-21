@@ -135,3 +135,9 @@ The first local provisioning path remains a source-backed host proof. The next e
 ---
 <!-- THE SINGULARITY WORKSHOP FOOTER -->
 <p align="center"><img src="https://raw.githubusercontent.com/TrentBest/FSM_API/master/Documentation/Branding/TheSingularityWorkshop.png" alt="The Singularity Workshop avatar" width="200" /></p>
+
+
+## Simulation demonstrations
+
+- [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — process-local, virtual-time message routing with explicit identity and delivery traces.
+- [Hosted Market-Economy Simulation](docs/HOSTED_MARKET_ECONOMY_SIMULATION.md) — the Economy reference ledger scenario routed to ServerApp institution participants. This is an in-process simulation proof, not a live financial system.
