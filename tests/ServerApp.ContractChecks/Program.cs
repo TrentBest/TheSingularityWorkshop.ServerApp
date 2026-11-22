@@ -63,6 +63,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("full swarm reports one expired task as incomplete", FullSwarmReportsExpiredTask),
     ("full swarm deduplicates one task attempt and completes all agents", FullSwarmDeduplicatesTaskAttempt),
     ("swarm ledger rejects mismatched and duplicate acknowledgements", SwarmLedgerValidatesAcknowledgements),
+    ("swarm ledger enforces terminal and single-delivery transitions", SwarmLedgerEnforcesTransitions),
 };
 
 var failures = new List<string>();
@@ -1159,6 +1160,57 @@ static Task SwarmLedgerValidatesAcknowledgements()
     Assert(ledger.GetState(agentId) == SwarmTaskLifecycle.Completed &&
            ledger.AcknowledgedCount == 1,
         "The ledger did not retain exactly one completed acknowledgement.");
+    return Task.CompletedTask;
+}
+
+static Task SwarmLedgerEnforcesTransitions()
+{
+    static void AssertThrows(Action action, string message)
+    {
+        try
+        {
+            action();
+            throw new InvalidOperationException(message);
+        }
+        catch (InvalidOperationException exception) when (exception.Message == message)
+        {
+            throw;
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    var failedLedger = new SwarmExecutionLedger();
+    failedLedger.Issue("agent-failed", "task-failed");
+    AssertThrows(
+        () => failedLedger.Issue("agent-failed", "another-task"),
+        "The ledger accepted a second task for one agent.");
+    failedLedger.MarkDelivered("agent-failed", "task-failed");
+    AssertThrows(
+        () => failedLedger.MarkDelivered("agent-failed", "task-failed"),
+        "The ledger accepted a second delivery transition.");
+    failedLedger.MarkFailed("agent-failed", "task-failed");
+    Assert(failedLedger.GetState("agent-failed") == SwarmTaskLifecycle.Failed &&
+           !failedLedger.TryAcknowledge("agent-failed", "task-failed"),
+        "A failed task was acknowledged or lost its terminal state.");
+    AssertThrows(
+        () => failedLedger.MarkExpired("agent-failed"),
+        "The ledger expired a task that had already failed.");
+
+    var expiredLedger = new SwarmExecutionLedger();
+    expiredLedger.Issue("agent-expired", "task-expired");
+    expiredLedger.MarkExpired("agent-expired");
+    Assert(expiredLedger.GetState("agent-expired") == SwarmTaskLifecycle.Expired &&
+           !expiredLedger.TryAcknowledge("agent-expired", "task-expired"),
+        "An expired task was acknowledged or lost its terminal state.");
+    AssertThrows(
+        () => expiredLedger.MarkDelivered("agent-expired", "task-expired"),
+        "The ledger delivered a task after it expired.");
+    AssertThrows(
+        () => expiredLedger.TryAcknowledge("unknown-agent", "task-expired"),
+        "The ledger accepted an acknowledgement from an unknown agent.");
+
     return Task.CompletedTask;
 }
 
