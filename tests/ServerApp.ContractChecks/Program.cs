@@ -1167,18 +1167,17 @@ static Task SwarmLedgerEnforcesTransitions()
 {
     static void AssertThrows(Action action, string message)
     {
+        var threw = false;
         try
         {
             action();
-            throw new InvalidOperationException(message);
-        }
-        catch (InvalidOperationException exception) when (exception.Message == message)
-        {
-            throw;
         }
         catch (InvalidOperationException)
         {
+            threw = true;
         }
+
+        Assert(threw, message);
     }
 
     var failedLedger = new SwarmExecutionLedger();
@@ -1198,6 +1197,12 @@ static Task SwarmLedgerEnforcesTransitions()
         () => failedLedger.MarkExpired("agent-failed"),
         "The ledger expired a task that had already failed.");
 
+    var issuedFailureLedger = new SwarmExecutionLedger();
+    issuedFailureLedger.Issue("agent-issued-failure", "task-issued-failure");
+    issuedFailureLedger.MarkFailed("agent-issued-failure", "task-issued-failure");
+    Assert(issuedFailureLedger.GetState("agent-issued-failure") == SwarmTaskLifecycle.Failed,
+        "A task could not transition directly from Issued to Failed.");
+
     var expiredLedger = new SwarmExecutionLedger();
     expiredLedger.Issue("agent-expired", "task-expired");
     expiredLedger.MarkExpired("agent-expired");
@@ -1207,6 +1212,9 @@ static Task SwarmLedgerEnforcesTransitions()
     AssertThrows(
         () => expiredLedger.MarkDelivered("agent-expired", "task-expired"),
         "The ledger delivered a task after it expired.");
+    AssertThrows(
+        () => expiredLedger.MarkFailed("agent-expired", "task-expired"),
+        "The ledger changed an expired task to failed.");
     AssertThrows(
         () => expiredLedger.TryAcknowledge("unknown-agent", "task-expired"),
         "The ledger accepted an acknowledgement from an unknown agent.");
