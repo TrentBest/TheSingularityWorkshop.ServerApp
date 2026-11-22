@@ -80,8 +80,7 @@ public static class AutonomousSwarmFaultSimulation
             fabric.Register(group);
             foreach (var agentId in agentIds)
             {
-                var taskName = $"survey-cell:{groupId}:{agentId[^2..]}";
-                var agent = new Agent(agentId, groupId, taskName, coordinator.ParticipantId, fabric,
+                var agent = new Agent(agentId, groupId, coordinator.ParticipantId, fabric,
                     ledger, NextId, faultMode, faultedAgentId);
                 agents.Add(agentId, agent);
                 fabric.Register(agent);
@@ -203,7 +202,6 @@ public static class AutonomousSwarmFaultSimulation
     private sealed class Agent(
         string agentId,
         string groupId,
-        string taskName,
         string coordinatorId,
         SimulationMessageFabric fabric,
         SwarmExecutionLedger ledger,
@@ -213,7 +211,6 @@ public static class AutonomousSwarmFaultSimulation
     {
         private string _assignedTask = string.Empty;
         private int _remaining = AutonomousSwarmSimulation.InitialAgentResourceUnits;
-        private bool _failed;
 
         public string ParticipantId { get; } = agentId;
         public string RoleId => "benign-survey-agent";
@@ -229,7 +226,6 @@ public static class AutonomousSwarmFaultSimulation
             if (faultMode == SwarmFaultMode.ParticipantHandlerFailure && ParticipantId == faultedAgentId)
             {
                 ledger.MarkFailed(ParticipantId, message.Payload);
-                _failed = true;
                 throw new InvalidOperationException("Injected participant handler failure.");
             }
 
