@@ -7,7 +7,8 @@ public enum SwarmFaultMode
 {
     ParticipantHandlerFailure,
     DelayedTaskExpiry,
-    DuplicateTaskAttempt
+    DuplicateTaskAttempt,
+    ParticipantHandlerFailureAfterDelivery
 }
 
 /// <summary>Inspectable terminal state of a fault-injection run.</summary>
@@ -133,7 +134,7 @@ public static class SwarmFaultInjectionSimulation
                 message.Payload != "survey-cell:bounded-fault-proof")
                 throw new InvalidOperationException("The agent received an invalid virtual task.");
 
-            if (faultMode == SwarmFaultMode.ParticipantHandlerFailure)
+            if (faultMode is SwarmFaultMode.ParticipantHandlerFailure or SwarmFaultMode.ParticipantHandlerFailureAfterDelivery)
                 throw new InvalidOperationException("Injected participant handler failure.");
 
             var acknowledgement = new SimulationMessageEnvelope(
