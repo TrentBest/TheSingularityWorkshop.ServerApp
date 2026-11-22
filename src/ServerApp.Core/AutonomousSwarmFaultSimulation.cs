@@ -232,6 +232,13 @@ public static class AutonomousSwarmFaultSimulation
             ledger.MarkDelivered(ParticipantId, message.Payload);
             _assignedTask = message.Payload;
             _remaining--;
+            if (faultMode == SwarmFaultMode.ParticipantHandlerFailureAfterDelivery &&
+                ParticipantId == faultedAgentId)
+            {
+                ledger.MarkFailed(ParticipantId, message.Payload);
+                throw new InvalidOperationException("Injected participant handler failure after delivery and resource consumption.");
+            }
+
             var acknowledgement = new SimulationMessageEnvelope(
                 nextId(), RunId, ParticipantId, coordinatorId, AcknowledgeType,
                 1, 3, 6, _assignedTask);
