@@ -63,7 +63,8 @@ public static class AutonomousSwarmSimulation
         cancellationToken.ThrowIfCancellationRequested();
 
         var fabric = new SimulationMessageFabric(RunId);
-        var coordinator = new SwarmCoordinator();
+        var ledger = new SwarmExecutionLedger();
+        var coordinator = new SwarmCoordinator(ledger);
         fabric.Register(coordinator);
 
         var groups = new Dictionary<string, SwarmGroupParticipant>(StringComparer.Ordinal);
@@ -76,14 +77,14 @@ public static class AutonomousSwarmSimulation
             var agentIds = Enumerable.Range(0, agentsPerGroup)
                 .Select(agentIndex => $"{groupId}-agent-{agentIndex + 1:D2}")
                 .ToArray();
-            var group = new SwarmGroupParticipant(groupId, agentIds, fabric, () => NextId(ref nextMessageId));
+            var group = new SwarmGroupParticipant(groupId, agentIds, fabric, ledger, () => NextId(ref nextMessageId));
             groups.Add(groupId, group);
             fabric.Register(group);
 
             foreach (var agentId in agentIds)
             {
                 var agent = new SwarmAgentParticipant(
-                    agentId, groupId, coordinator.ParticipantId, fabric,
+                    agentId, groupId, coordinator.ParticipantId, fabric, ledger,
                     () => NextId(ref nextMessageId));
                 agents.Add(agentId, agent);
                 fabric.Register(agent);
@@ -117,6 +118,7 @@ public static class AutonomousSwarmSimulation
         var remainingResources = agentSnapshots.Values.Sum(agent => agent.RemainingResourceUnits);
 
         if (assigned != agents.Count || acknowledged != assigned ||
+            ledger.IssuedCount != assigned || ledger.AcknowledgedCount != assigned ||
             coordinator.AcknowledgedAgents.Count != assigned)
             throw new InvalidOperationException("The swarm run did not complete every assigned virtual task and coordinator acknowledgement.");
         if (remainingResources != initialResources - assigned)
@@ -146,7 +148,7 @@ public static class AutonomousSwarmSimulation
             throw new InvalidOperationException($"The fabric rejected a {description}.");
     }
 
-    private sealed class SwarmCoordinator : ISimulationMessageParticipant
+    private sealed class SwarmCoordinator(SwarmExecutionLedger ledger) : ISimulationMessageParticipant
     {
         public string ParticipantId => "swarm-coordinator";
         public string RoleId => "benign-swarm-coordinator";
@@ -157,6 +159,7 @@ public static class AutonomousSwarmSimulation
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (message.SchemaVersion != 1 || message.MessageType != AcknowledgeType ||
+                !ledger.TryAcknowledge(message.SenderParticipantId, message.Payload) ||
                 !AcknowledgedAgents.Add(message.SenderParticipantId))
                 throw new InvalidOperationException("The coordinator received an invalid or duplicate acknowledgement.");
             return ValueTask.CompletedTask;
@@ -167,6 +170,7 @@ public static class AutonomousSwarmSimulation
         string groupId,
         IReadOnlyList<string> agentIds,
         SimulationMessageFabric fabric,
+        SwarmExecutionLedger ledger,
         Func<Guid> nextId) : ISimulationMessageParticipant
     {
         public string ParticipantId { get; } = groupId;
@@ -183,6 +187,7 @@ public static class AutonomousSwarmSimulation
             {
                 var agentId = agentIds[index];
                 var task = $"survey-cell:{ParticipantId}:{index + 1:D2}";
+                ledger.Issue(agentId, task);
                 var assignment = new SimulationMessageEnvelope(
                     nextId(), RunId, ParticipantId, agentId, AssignTaskType, 1, 2, 4, task);
                 RequireAccepted(fabric.Enqueue(assignment), "agent task assignment");
@@ -207,11 +212,11 @@ public static class AutonomousSwarmSimulation
         string groupId,
         string coordinatorId,
         SimulationMessageFabric fabric,
+        SwarmExecutionLedger ledger,
         Func<Guid> nextId) : ISimulationMessageParticipant
     {
         private string _assignedTask = string.Empty;
         private int _remainingResourceUnits = InitialAgentResourceUnits;
-        private bool _acknowledged;
 
         public string ParticipantId { get; } = agentId;
         public string RoleId => "benign-survey-agent";
@@ -219,7 +224,7 @@ public static class AutonomousSwarmSimulation
 
         public SwarmAgentSnapshot Snapshot => new(
             ParticipantId, groupId, _assignedTask,
-            InitialAgentResourceUnits, _remainingResourceUnits, _acknowledged);
+            InitialAgentResourceUnits, _remainingResourceUnits, ledger.IsAcknowledged(ParticipantId));
 
         public ValueTask ReceiveAsync(SimulationMessageEnvelope message, CancellationToken cancellationToken)
         {
@@ -229,13 +234,13 @@ public static class AutonomousSwarmSimulation
                 !message.Payload.StartsWith($"survey-cell:{groupId}:", StringComparison.Ordinal))
                 throw new InvalidOperationException("The agent received an invalid, duplicate, or unaffordable task.");
 
+            ledger.MarkDelivered(ParticipantId, message.Payload);
             _assignedTask = message.Payload;
             _remainingResourceUnits--;
             var acknowledgement = new SimulationMessageEnvelope(
                 nextId(), RunId, ParticipantId, coordinatorId,
                 AcknowledgeType, 1, 3, 5, _assignedTask);
             RequireAccepted(fabric.Enqueue(acknowledgement), "agent acknowledgement");
-            _acknowledged = true;
             return ValueTask.CompletedTask;
         }
     }
