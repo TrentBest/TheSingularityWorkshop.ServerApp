@@ -20,12 +20,12 @@ The default scenario contains 3 sub-swarms and 12 agents. Each agent receives on
 
 ## Fault-injection scenario
 
-`ServerApp.Simulation.SwarmFaultInjectionSimulation.RunAsync(mode)` runs one bounded virtual task under a selected deterministic fault:
+`ServerApp.Simulation.SwarmFaultInjectionSimulation.RunAsync(mode)` runs one bounded virtual task under a selected deterministic fault. This compact harness treats both handler-failure enum values as the same generic participant exception; it does not model a post-delivery resource debit. That stronger lifecycle case is exercised only by `AutonomousSwarmFaultSimulation.RunAsync()` below:
 
 | Fault mode | Expected outcome | Evidence |
 |---|---|---|
 | `ParticipantHandlerFailure` | `Failed` | Fabric records a failed handler before task delivery; no coordinator acknowledgement |
-| `ParticipantHandlerFailureAfterDelivery` | `Failed` | Full hierarchy records delivery and resource consumption before the handler fails; no coordinator acknowledgement |
+| `ParticipantHandlerFailureAfterDelivery` | `Failed` | Generic handler exception in this compact harness; post-delivery/resource-debit semantics are verified only by the full-hierarchy scenario below |
 | `DelayedTaskExpiry` | `Incomplete` | Task reaches its expiry step before delivery; no acknowledgement |
 | `DuplicateTaskAttempt` | `Completed` | Same message ID and content is recorded as duplicate; one delivery and one acknowledgement |
 
