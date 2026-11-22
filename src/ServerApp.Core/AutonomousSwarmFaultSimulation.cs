@@ -8,7 +8,8 @@ public enum SwarmAgentExecutionState
 {
     Completed,
     Failed,
-    Expired
+    Expired,
+    Unconfirmed
 }
 
 /// <summary>Immutable per-agent evidence from a full hierarchical swarm run.</summary>
@@ -60,7 +61,8 @@ public static class AutonomousSwarmFaultSimulation
         cancellationToken.ThrowIfCancellationRequested();
 
         var fabric = new SimulationMessageFabric(RunId);
-        var coordinator = new Coordinator();
+        var ledger = new SwarmExecutionLedger();
+        var coordinator = new Coordinator(ledger);
         fabric.Register(coordinator);
         var agents = new Dictionary<string, Agent>(StringComparer.Ordinal);
         var groups = new List<Group>();
@@ -73,14 +75,14 @@ public static class AutonomousSwarmFaultSimulation
             var groupId = $"group-{groupIndex:D2}";
             var agentIds = Enumerable.Range(1, 4)
                 .Select(index => $"{groupId}-agent-{index:D2}").ToArray();
-            var group = new Group(groupId, agentIds, fabric, NextId, faultMode, faultedAgentId);
+            var group = new Group(groupId, agentIds, fabric, ledger, NextId, faultMode, faultedAgentId);
             groups.Add(group);
             fabric.Register(group);
             foreach (var agentId in agentIds)
             {
                 var taskName = $"survey-cell:{groupId}:{agentId[^2..]}";
                 var agent = new Agent(agentId, groupId, taskName, coordinator.ParticipantId, fabric,
-                    NextId, faultMode, faultedAgentId);
+                    ledger, NextId, faultMode, faultedAgentId);
                 agents.Add(agentId, agent);
                 fabric.Register(agent);
             }
@@ -99,10 +101,12 @@ public static class AutonomousSwarmFaultSimulation
         await fabric.AdvanceToAsync(4, cancellationToken).ConfigureAwait(false);
 
         var trace = fabric.Trace;
+        if (faultMode == SwarmFaultMode.DelayedTaskExpiry &&
+            trace.Any(item => item.Disposition == SimulationMessageDisposition.Expired))
+            ledger.MarkExpired(faultedAgentId);
         var snapshots = agents.Values.ToDictionary(
             agent => agent.ParticipantId,
-            agent => agent.Snapshot(coordinator.AcknowledgedAgents.Contains(agent.ParticipantId),
-                trace, faultMode, faultedAgentId),
+            agent => agent.Snapshot(ledger, coordinator.AcknowledgedAgents.Contains(agent.ParticipantId)),
             StringComparer.Ordinal);
 
         // Assignment count is the number of host-issued task envelopes, not acknowledgements.
@@ -111,7 +115,8 @@ public static class AutonomousSwarmFaultSimulation
         var initialResources = agents.Count * AutonomousSwarmSimulation.InitialAgentResourceUnits;
         var remainingResources = snapshots.Values.Sum(agent => agent.RemainingResourceUnits);
 
-        if (acknowledged > assigned || remainingResources < 0 ||
+        if (ledger.IssuedCount != assigned || ledger.AcknowledgedCount != acknowledged ||
+            acknowledged > assigned || remainingResources < 0 ||
             remainingResources > initialResources)
             throw new InvalidOperationException("The fault-injected swarm violated its aggregate accounting bounds.");
 
@@ -137,7 +142,7 @@ public static class AutonomousSwarmFaultSimulation
             throw new InvalidOperationException($"The fabric rejected a {description}.");
     }
 
-    private sealed class Coordinator : ISimulationMessageParticipant
+    private sealed class Coordinator(SwarmExecutionLedger ledger) : ISimulationMessageParticipant
     {
         public string ParticipantId => "swarm-fault-coordinator";
         public string RoleId => "benign-swarm-coordinator";
@@ -148,6 +153,7 @@ public static class AutonomousSwarmFaultSimulation
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (message.SchemaVersion != 1 || message.MessageType != AcknowledgeType ||
+                !ledger.TryAcknowledge(message.SenderParticipantId, message.Payload) ||
                 !AcknowledgedAgents.Add(message.SenderParticipantId))
                 throw new InvalidOperationException("The coordinator received an invalid or duplicate acknowledgement.");
             return ValueTask.CompletedTask;
@@ -158,6 +164,7 @@ public static class AutonomousSwarmFaultSimulation
         string groupId,
         IReadOnlyList<string> agentIds,
         SimulationMessageFabric fabric,
+        SwarmExecutionLedger ledger,
         Func<Guid> nextId,
         SwarmFaultMode faultMode,
         string faultedAgentId) : ISimulationMessageParticipant
@@ -177,6 +184,7 @@ public static class AutonomousSwarmFaultSimulation
                 var agentId = agentIds[index];
                 var delayed = faultMode == SwarmFaultMode.DelayedTaskExpiry && agentId == faultedAgentId;
                 var task = $"survey-cell:{ParticipantId}:{index + 1:D2}";
+                ledger.Issue(agentId, task);
                 var assignment = new SimulationMessageEnvelope(
                     nextId(), RunId, ParticipantId, agentId, AssignTaskType, 1,
                     delayed ? 3 : 2, delayed ? 4 : 5, task);
@@ -198,6 +206,7 @@ public static class AutonomousSwarmFaultSimulation
         string taskName,
         string coordinatorId,
         SimulationMessageFabric fabric,
+        SwarmExecutionLedger ledger,
         Func<Guid> nextId,
         SwarmFaultMode faultMode,
         string faultedAgentId) : ISimulationMessageParticipant
@@ -219,10 +228,12 @@ public static class AutonomousSwarmFaultSimulation
 
             if (faultMode == SwarmFaultMode.ParticipantHandlerFailure && ParticipantId == faultedAgentId)
             {
+                ledger.MarkFailed(ParticipantId, message.Payload);
                 _failed = true;
                 throw new InvalidOperationException("Injected participant handler failure.");
             }
 
+            ledger.MarkDelivered(ParticipantId, message.Payload);
             _assignedTask = message.Payload;
             _remaining--;
             var acknowledgement = new SimulationMessageEnvelope(
@@ -233,19 +244,18 @@ public static class AutonomousSwarmFaultSimulation
         }
 
         public SwarmAgentExecutionSnapshot Snapshot(
-            bool acknowledged,
-            IReadOnlyList<SimulationMessageTrace> trace,
-            SwarmFaultMode mode,
-            string target)
+            SwarmExecutionLedger ledger,
+            bool acknowledged)
         {
-            var expired = mode == SwarmFaultMode.DelayedTaskExpiry && ParticipantId == target &&
-                trace.Any(item => item.Disposition == SimulationMessageDisposition.Expired);
-            var state = _failed ? SwarmAgentExecutionState.Failed
-                : expired ? SwarmAgentExecutionState.Expired
-                : acknowledged ? SwarmAgentExecutionState.Completed
-                : SwarmAgentExecutionState.Expired;
+            var state = ledger.GetState(ParticipantId) switch
+            {
+                SwarmTaskLifecycle.Completed => SwarmAgentExecutionState.Completed,
+                SwarmTaskLifecycle.Failed => SwarmAgentExecutionState.Failed,
+                SwarmTaskLifecycle.Expired => SwarmAgentExecutionState.Expired,
+                _ => SwarmAgentExecutionState.Unconfirmed
+            };
             return new SwarmAgentExecutionSnapshot(
-                ParticipantId, groupId, taskName,
+                ParticipantId, groupId, ledger.GetTaskId(ParticipantId),
                 state, AutonomousSwarmSimulation.InitialAgentResourceUnits, _remaining, acknowledged);
         }
     }
