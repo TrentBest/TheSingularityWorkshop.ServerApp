@@ -59,6 +59,7 @@ Capability discovery may identify a gap, but it must remain a proposal. Any futu
 The contract checks cover:
 
 - Default bounded partition, exact task and acknowledgement counts, resource accounting, deterministic replay, and rejection of dimensions above configured limits
+- Shared execution-ledger transitions, rejection of mismatched task acknowledgements, and suppression of duplicate acknowledgements
 - Injected participant-handler failure reported as `Failed`, with no acknowledgement
 - Delayed task expiry reported as `Incomplete`, with no acknowledgement
 - Identical duplicate task attempt suppressed, with one delivery and one acknowledgement
