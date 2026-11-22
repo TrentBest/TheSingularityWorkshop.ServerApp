@@ -1237,6 +1237,22 @@ static Task SwarmLedgerEnforcesTransitions()
     AssertThrows(
         () => expiredLedger.TryAcknowledge("unknown-agent", "task-expired"),
         "The ledger accepted an acknowledgement from an unknown agent.");
+    Assert(expiredLedger.GetState("unregistered-agent") == SwarmTaskLifecycle.Unconfirmed &&
+           expiredLedger.GetTaskId("unregistered-agent") == string.Empty,
+        "An unregistered agent was not represented as unconfirmed without an issued task.");
+
+    var senderLedger = new SwarmExecutionLedger();
+    senderLedger.Issue("agent-a", "task-a");
+    senderLedger.Issue("agent-b", "task-b");
+    senderLedger.MarkDelivered("agent-a", "task-a");
+    senderLedger.MarkDelivered("agent-b", "task-b");
+    AssertThrows(
+        () => senderLedger.TryAcknowledge("agent-b", "task-a"),
+        "The ledger accepted agent A's task acknowledgement from agent B.");
+    Assert(senderLedger.GetState("agent-a") == SwarmTaskLifecycle.Delivered &&
+           senderLedger.GetState("agent-b") == SwarmTaskLifecycle.Delivered &&
+           senderLedger.AcknowledgedCount == 0,
+        "A cross-agent acknowledgement attempt changed either agent's lifecycle.");
 
     return Task.CompletedTask;
 }
