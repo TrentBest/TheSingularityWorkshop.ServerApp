@@ -24,7 +24,8 @@ The default scenario contains 3 sub-swarms and 12 agents. Each agent receives on
 
 | Fault mode | Expected outcome | Evidence |
 |---|---|---|
-| `ParticipantHandlerFailure` | `Failed` | Fabric records a failed handler; no coordinator acknowledgement |
+| `ParticipantHandlerFailure` | `Failed` | Fabric records a failed handler before task delivery; no coordinator acknowledgement |
+| `ParticipantHandlerFailureAfterDelivery` | `Failed` | Full hierarchy records delivery and resource consumption before the handler fails; no coordinator acknowledgement |
 | `DelayedTaskExpiry` | `Incomplete` | Task reaches its expiry step before delivery; no acknowledgement |
 | `DuplicateTaskAttempt` | `Completed` | Same message ID and content is recorded as duplicate; one delivery and one acknowledgement |
 
@@ -38,11 +39,12 @@ These are deliberately narrow deterministic fault proofs. They do not yet provid
 
 | Fault mode | Full-swarm outcome | Coordinator evidence |
 |---|---|---|
-| `ParticipantHandlerFailure` | `Failed` | 11 of 12 agents acknowledge; the target participant handler is recorded as failed |
+| `ParticipantHandlerFailure` | `Failed` | 11 of 12 agents acknowledge; the target fails before delivery and consumes no resource |
+| `ParticipantHandlerFailureAfterDelivery` | `Failed` | 11 of 12 agents acknowledge; the target is marked delivered, consumes one resource unit, then fails before acknowledgement |
 | `DelayedTaskExpiry` | `Incomplete` | 11 of 12 agents acknowledge; the target task expires before delivery |
 | `DuplicateTaskAttempt` | `Completed` | All 12 agents acknowledge; the identical duplicate is suppressed before a second delivery |
 
-The immutable result includes every agent's terminal state, remaining resource units, coordinator acknowledgement, the complete fabric trace, and aggregate assignment/acknowledgement/resource counts. In the one-agent failure and expiry cases, eleven agents consume one unit each and the affected agent consumes none (36 initial, 25 remaining); the duplicate case completes all twelve tasks (36 initial, 24 remaining). The host declares `Completed` only when the coordinator has evidence for all twelve unique agent acknowledgements. A handler failure is terminally `Failed`; an expired task is `Incomplete`. Neither is retried and neither receives a fabricated acknowledgement.
+The immutable result includes every agent's terminal state, remaining resource units, coordinator acknowledgement, the complete fabric trace, and aggregate assignment/acknowledgement/resource counts. In the pre-delivery failure and expiry cases, eleven agents consume one unit each and the affected agent consumes none (36 initial, 25 remaining). In the post-delivery failure case, all twelve agents consume one unit before the target fails (36 initial, 24 remaining); the duplicate case also completes all twelve tasks (36 initial, 24 remaining). The host declares `Completed` only when the coordinator has evidence for all twelve unique agent acknowledgements. A handler failure is terminally `Failed`; an expired task is `Incomplete`. Neither is retried and neither receives a fabricated acknowledgement.
 
 Both `AutonomousSwarmSimulation.RunAsync()` and `AutonomousSwarmFaultSimulation.RunAsync()` now use the same host-owned `SwarmExecutionLedger` for issued task identity, per-agent lifecycle, and acknowledgement validation. A task progresses from `Issued` to `Delivered` and then to `Completed` only when the coordinator receives an acknowledgement whose sender and task identity match the host-issued assignment. Handler failure and expiry are terminal evidence; an agent without sufficient evidence remains `Unconfirmed` rather than being silently labeled expired. The normal all-success path remains available through `AutonomousSwarmSimulation.RunAsync()`. This fault-injection entry point is a deterministic reliability proof, not a production scheduler or recovery policy. Duplicate suppression is enqueue idempotency, not exactly-once execution.
 
@@ -60,7 +62,8 @@ The contract checks cover:
 
 - Default bounded partition, exact task and acknowledgement counts, resource accounting, deterministic replay, and rejection of dimensions above configured limits
 - Shared execution-ledger transitions, rejection of mismatched task acknowledgements, and suppression of duplicate acknowledgements
-- Injected participant-handler failure reported as `Failed`, with no acknowledgement
+- Injected participant-handler failure before delivery reported as `Failed`, with no acknowledgement
+- Injected participant-handler failure after delivery/resource consumption reported as `Failed`, with the consumed resource retained and no acknowledgement
 - Delayed task expiry reported as `Incomplete`, with no acknowledgement
 - Identical duplicate task attempt suppressed, with one delivery and one acknowledgement
 
