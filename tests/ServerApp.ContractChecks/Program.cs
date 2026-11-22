@@ -60,6 +60,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("swarm delayed task expiry produces an explicit incomplete outcome", SwarmFaultReportsExpiredTask),
     ("swarm duplicate task attempt is deduplicated without duplicate work", SwarmFaultDeduplicatesTaskAttempt),
     ("full swarm reports one failed participant without false completion", FullSwarmReportsParticipantFailure),
+    ("full swarm reports failure after delivery and resource consumption", FullSwarmReportsFailureAfterDelivery),
     ("full swarm reports one expired task as incomplete", FullSwarmReportsExpiredTask),
     ("full swarm deduplicates one task attempt and completes all agents", FullSwarmDeduplicatesTaskAttempt),
     ("swarm ledger rejects mismatched and duplicate acknowledgements", SwarmLedgerValidatesAcknowledgements),
@@ -1090,6 +1091,25 @@ static async Task FullSwarmReportsParticipantFailure()
            result.Agents[target].RemainingResourceUnits == 3 &&
            result.Agents[target].AssignedTask == "survey-cell:group-02:02",
         "The full swarm did not preserve eleven successful agents and one truthful participant failure.");
+}
+
+static async Task FullSwarmReportsFailureAfterDelivery()
+{
+    const string target = "group-02-agent-02";
+    var result = await AutonomousSwarmFaultSimulation.RunAsync(
+        SwarmFaultMode.ParticipantHandlerFailureAfterDelivery, target);
+    Assert(result.Outcome == SwarmFaultOutcome.Failed &&
+           result.Agents.Count == 12 && result.AssignedTasks == 12 &&
+           result.AcknowledgedTasks == 11 &&
+           result.Agents[target].State == SwarmAgentExecutionState.Failed &&
+           result.Agents.Values.Count(agent => agent.State == SwarmAgentExecutionState.Completed) == 11 &&
+           result.TotalInitialResourceUnits == 36 && result.TotalRemainingResourceUnits == 24 &&
+           result.Agents[target].RemainingResourceUnits == 2 &&
+           !result.Agents[target].CoordinatorAcknowledged &&
+           result.Agents[target].AssignedTask == "survey-cell:group-02:02" &&
+           result.Trace.Any(item => item.Disposition == SimulationMessageDisposition.Failed &&
+               item.Detail.Contains("InvalidOperationException", StringComparison.Ordinal)),
+        "The full swarm did not preserve resource consumption and failure after task delivery without false acknowledgement.");
 }
 
 static async Task FullSwarmReportsExpiredTask()
