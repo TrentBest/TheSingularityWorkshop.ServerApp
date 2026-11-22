@@ -62,6 +62,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("full swarm reports one failed participant without false completion", FullSwarmReportsParticipantFailure),
     ("full swarm reports one expired task as incomplete", FullSwarmReportsExpiredTask),
     ("full swarm deduplicates one task attempt and completes all agents", FullSwarmDeduplicatesTaskAttempt),
+    ("swarm ledger rejects mismatched and duplicate acknowledgements", SwarmLedgerValidatesAcknowledgements),
 };
 
 var failures = new List<string>();
@@ -1127,6 +1128,38 @@ static async Task FullSwarmDeduplicatesTaskAttempt()
                .SequenceEqual(second.Trace.Select(item =>
                    (item.MessageId, item.Disposition, item.Step, item.Sequence))),
         "The full swarm did not suppress the duplicate while completing all twelve agents deterministically.");
+}
+
+static Task SwarmLedgerValidatesAcknowledgements()
+{
+    const string agentId = "group-01-agent-01";
+    const string taskId = "survey-cell:group-01:01";
+    var ledger = new SwarmExecutionLedger();
+    ledger.Issue(agentId, taskId);
+    Assert(ledger.GetState(agentId) == SwarmTaskLifecycle.Issued,
+        "A host-issued task did not begin in the Issued state.");
+
+    ledger.MarkDelivered(agentId, taskId);
+    try
+    {
+        ledger.TryAcknowledge(agentId, "survey-cell:group-01:99");
+        throw new InvalidOperationException("The ledger accepted an acknowledgement for the wrong task.");
+    }
+    catch (InvalidOperationException exception) when (
+        exception.Message.Contains("did not match", StringComparison.Ordinal))
+    {
+    }
+
+    Assert(ledger.GetState(agentId) == SwarmTaskLifecycle.Delivered,
+        "A mismatched acknowledgement changed the agent lifecycle.");
+    Assert(ledger.TryAcknowledge(agentId, taskId),
+        "The ledger rejected the matching acknowledgement.");
+    Assert(!ledger.TryAcknowledge(agentId, taskId),
+        "The ledger accepted a duplicate acknowledgement.");
+    Assert(ledger.GetState(agentId) == SwarmTaskLifecycle.Completed &&
+           ledger.AcknowledgedCount == 1,
+        "The ledger did not retain exactly one completed acknowledgement.");
+    return Task.CompletedTask;
 }
 
 static void Assert(bool condition, string message)
