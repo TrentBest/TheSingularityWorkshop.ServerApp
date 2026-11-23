@@ -185,7 +185,9 @@ internal static class Program
             "observation sequence must be monotonic for one run");
         Assert(observations.Any(item => item.Phase == "bundle" && item.Status == "loaded" &&
             item.BundleId == 300 && item.BundleVersion == "1.2.3"),
-            "the host must report the exact loaded bundle identity from RuntimeAssembly");
+            "the host must report the exact loaded bundle identity from RuntimeAssembly; observed: " +
+            string.Join(" | ", observations.Where(item => item.Phase == "bundle").Select(item =>
+                $"phase={item.Phase},status={item.Status},id={item.BundleId},version={item.BundleVersion}")));
         Assert(observations.Any(item => item.Phase == "role-adapter" && item.Status == "invocation-started"),
             "the host must report the actual role-adapter invocation boundary");
         Assert(!observations.Any(item => item.Phase == "bundle" && item.Status.StartsWith("invoked", StringComparison.Ordinal)),
