@@ -126,7 +126,23 @@ dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.Foundr
 
 A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Foundry and FSM_COS. CI passed with 10 documentation/compiler warnings originating in the pinned FSM_API and FSM_COS source projects; there were zero build errors, and the ServerApp contract executables passed. No package publication is authorized.
 
-## 6. Non-goals of the first proof
+## 6. Run-correlated host observations
+
+`FoundryComposedProvisioningHost` now accepts an optional `IServerRoleExecutionObserver`. It emits immutable `ServerRoleExecutionObservation` records with the authoritative Foundry `RunId`, a per-operation monotonic sequence, timestamp, phase/status, and optional exact runtime/bundle identity.
+
+The current observation seam reports:
+- workflow accepted, started, terminal result, and accepted cancellation;
+- composition started, succeeded, failed, or cancelled;
+- one `bundle / loaded` observation for each exact `RuntimeAssembly.LoadedBundles` member, using its actual `Id` and `Descriptor.Version`;
+- role-adapter invocation started and completed-ready/completed-not-ready/failed, at the actual `IServerRoleRuntimeAdapter.StartAsync` call boundary.
+
+**Important evidence boundary:** `bundle / loaded` means the object is present in the composed assembly. It does not mean that bundle code, a provider, or any handler was invoked. The `role-adapter` event proves only that ServerApp invoked its registered role adapter; it does not identify which MicroBundle capabilities the adapter subsequently called. Per-provider invocation evidence still requires instrumentation at the real dispatcher/handler call sites. No provider IDs are fabricated.
+
+The observer is optional. Observer exceptions are swallowed and cannot change provisioning outcomes or cleanup. The observer must therefore be treated as telemetry, not a transaction participant or durable audit log. A production implementation should enqueue observations into a bounded, durable host-owned audit stream and expose delivery/overflow health separately.
+
+Contract checks verify RunId correlation, monotonic sequence, exact loaded bundle identity, the role-adapter invocation boundary, and the absence of fabricated per-bundle invocation events.
+
+## 7. Non-goals of the first proof
 
 The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
 
@@ -140,6 +156,8 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Contract checks cover ready, failed/not-ready, duplicate pending instance, cancellation before start, and cooperative cancellation while a role handler is running.
 - [x] FSM_COS composition handoff implemented through a separate host-owned RuntimeManifest and approved role-definition catalog.
 - [x] RuntimeAssembly passed to an explicit ServerApp role adapter; Foundry workflow context carries only an opaque operation ID.
+- [x] Optional run-correlated observer reports workflow/composition lifecycle, exact loaded bundle identities, and role-adapter invocation without conflating loaded membership with provider execution.
+- [ ] Instrument individual provider/handler dispatch call sites so dashboards can distinguish actual per-provider invocation from bundle loading and role-adapter activation.
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
 - [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Foundry/FSM_COS host contract-check executable passed.
