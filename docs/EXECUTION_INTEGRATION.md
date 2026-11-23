@@ -99,7 +99,7 @@ Both Execution and FSM_COS are built from pinned source; no new NuGet package is
 
 | Repository | Commit |
 |---|---|
-| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution) | `4c3002548b1437e3bdb51dc97052a2e0e251ba87` |
+| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution) | `9907f158b6fa38ab7556bbbc373a0b4097ae53c2` |
 | [FSM_COS](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS) | `cad5775fe55a6a8d0b6df8bbd22017c1179141c4` |
 | [FSM_API](https://github.com/TrentBest/FSM_API) | `4db572f5e0e74df028b01ee22fb393e2bd203eb6` |
 | [FSM_UserIO](https://github.com/TrentBest/FSM_UserIO) | `db5b59d0521a341f97e6077e3508eb2bd7171607` |
@@ -111,7 +111,7 @@ For a local checkout from the ServerApp repository root:
 
 ```bash
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
-git -C _deps/FSM_Execution checkout 4c3002548b1437e3bdb51dc97052a2e0e251ba87
+git -C _deps/FSM_Execution checkout 9907f158b6fa38ab7556bbbc373a0b4097ae53c2
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
