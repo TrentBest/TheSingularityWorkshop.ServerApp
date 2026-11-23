@@ -153,8 +153,12 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         var cancelled = _workflows.Cancel(runId);
         if (cancelled && _workflows.GetSnapshot(runId).Status == WorkflowRunStatus.Cancelled)
         {
-            if (TryGetOperation(runId, out var state) && state.Result is null)
-                state.Result = Cancelled(state.Manifest, "Foundry cancelled the accepted provisioning workflow.");
+            if (TryGetOperation(runId, out var state))
+            {
+                Observe(runId, state, "workflow", "cancelled", detail: "Foundry accepted cancellation.");
+                if (state.Result is null)
+                    state.Result = Cancelled(state.Manifest, "Foundry cancelled the accepted provisioning workflow.");
+            }
             ReleasePendingInstance(runId);
         }
         return cancelled;
