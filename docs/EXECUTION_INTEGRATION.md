@@ -68,12 +68,12 @@ The Execution development source exposes:
 - `WorkflowRunner`: validates the complete definition before handler side effects, executes handlers sequentially, stops after failure, and reports structured outcomes.
 
 Source references:
-- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/src/Execution.Workflow/WorkflowDefinition.cs)
-- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/src/Execution.Workflow/WorkflowHandlerRegistry.cs)
-- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/src/Execution.Workflow/WorkflowExecutionContext.cs)
-- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/src/Execution.Workflow/WorkflowRunner.cs)
-- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/src/Execution.Workflow/WorkflowExecutionCoordinator.cs)
-- [Execution architecture](https://github.com/TrentBest/TheSingularityWorkshop.Execution/blob/development/docs/ARCHITECTURE.md)
+- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowDefinition.cs)
+- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowHandlerRegistry.cs)
+- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowExecutionContext.cs)
+- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowRunner.cs)
+- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [Execution architecture](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/docs/ARCHITECTURE.md)
 
 FSM_COS source exposes `FsmCos.Execute` / `TryExecute`, `RuntimeManifest`, and `RuntimeAssembly`. The assembly contains composed MicroBundles; it is not itself a started server process or a Execution workflow. See [FsmCos.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/FsmCos.cs), [RuntimeManifest.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeManifest.cs), and [RuntimeAssembly.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeAssembly.cs).
 
@@ -99,19 +99,19 @@ Both Execution and FSM_COS are built from pinned source; no new NuGet package is
 
 | Repository | Commit |
 |---|---|
-| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.Execution) | `8bd3487a96af2cd7d667f62c4566a499bafe30dc` |
+| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution) | `8bd3487a96af2cd7d667f62c4566a499bafe30dc` |
 | [FSM_COS](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS) | `cad5775fe55a6a8d0b6df8bbd22017c1179141c4` |
 | [FSM_API](https://github.com/TrentBest/FSM_API) | `4db572f5e0e74df028b01ee22fb393e2bd203eb6` |
 | [FSM_UserIO](https://github.com/TrentBest/FSM_UserIO) | `db5b59d0521a341f97e6077e3508eb2bd7171607` |
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
 
-FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Execution/src/Execution.Workflow/Execution.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
+FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
 For a local checkout from the ServerApp repository root:
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Execution.git _deps/Execution
-git -C _deps/Execution checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/Foundry
+git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
