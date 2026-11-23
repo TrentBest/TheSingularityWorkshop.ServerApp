@@ -349,6 +349,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
     {
         public ServerRoleManifest Manifest { get; } = manifest;
         public Guid RunId { get; set; }
+        public Guid RunId { get; set; }
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }
