@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using ServerApp.Core;
-using TheSingularityWorkshop.Foundry;
+using TheSingularityWorkshop.Execution;
 
 namespace ServerApp.ExecutionHost;
 
 /// <summary>
-/// Hosts ServerApp role provisioning inside Foundry's real workflow lifecycle.
+/// Hosts ServerApp role provisioning inside Execution's real workflow lifecycle.
 /// This is a workflow adapter; it does not compose FSM_COS RuntimeAssembly instances.
 /// </summary>
 public sealed class ExecutionProvisioningHost : IAsyncDisposable
@@ -29,7 +29,7 @@ public sealed class ExecutionProvisioningHost : IAsyncDisposable
         _workflows = new WorkflowExecutionCoordinator(handlers);
     }
 
-    /// <summary>Accepts one role request into Foundry without starting it.</summary>
+    /// <summary>Accepts one role request into Execution without starting it.</summary>
     public WorkflowRunSnapshot Submit(ServerRoleManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -63,7 +63,7 @@ public sealed class ExecutionProvisioningHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Starts one accepted Foundry run and returns its authoritative workflow result.</summary>
+    /// <summary>Starts one accepted Execution run and returns its authoritative workflow result.</summary>
     public async Task<WorkflowResult> StartAsync(Guid runId, TimeSpan? timeout = null)
     {
         try
@@ -76,7 +76,7 @@ public sealed class ExecutionProvisioningHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Requests cooperative cancellation through Foundry.</summary>
+    /// <summary>Requests cooperative cancellation through Execution.</summary>
     public bool Cancel(Guid runId)
     {
         var cancelled = _workflows.Cancel(runId);
