@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using ServerApp.Core;
 using TheSingularityWorkshop.FSM_COS;
-using TheSingularityWorkshop.Foundry;
+using TheSingularityWorkshop.Execution;
 
 namespace ServerApp.ExecutionHost;
 
@@ -95,6 +95,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 });
 
             var snapshot = _workflows.Submit(definition, context);
+            state.RunId = snapshot.RunId;
             _runOperations.TryAdd(snapshot.RunId, operationId);
             Observe(snapshot.RunId, state, "workflow", "accepted", detail: "Execution accepted the provisioning run.");
             return snapshot;
@@ -288,7 +289,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
 
     private void Observe(WorkflowExecutionContext context, OperationState state, string phase, string status,
         ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null) =>
-        Observe(context.GetInput<Guid>(OperationIdInput), state, phase, status, runtimeId, bundleId, bundleVersion, detail);
+        Observe(state.RunId, state, phase, status, runtimeId, bundleId, bundleVersion, detail);
 
     private void Observe(Guid runId, OperationState state, string phase, string status,
         ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null)
@@ -347,6 +348,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
     private sealed class OperationState(ServerRoleManifest manifest)
     {
         public ServerRoleManifest Manifest { get; } = manifest;
+        public Guid RunId { get; set; }
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }

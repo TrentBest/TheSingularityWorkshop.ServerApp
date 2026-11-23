@@ -105,8 +105,8 @@ dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csp
 To build and run the composed Execution/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
+git -C _deps/FSM_Execution checkout 0561be668e3986c671d34b1e4a7b9da33fa68cd6
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -124,7 +124,7 @@ The diagnostic adapter and composed role adapters are in-process fixtures; the c
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — the first in-process message transport contract, ordering, expiry, duplicate handling, evidence, and limits.
-- [Execution Integration Boundary](docs/EXECUTION_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
+- [Execution Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
