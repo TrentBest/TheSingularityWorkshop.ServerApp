@@ -3,7 +3,7 @@
 
 # Execution Integration Boundary
 
-**Status: first Execution → FSM_COS → role-adapter vertical slice implemented in source; CI verification pending.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
+**Status: Execution → FSM_COS → role-adapter vertical slice implemented and verified by ServerApp CI run [#385](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45266465198) on the current PR head.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
 
 ## 1. The three jobs are different
 
