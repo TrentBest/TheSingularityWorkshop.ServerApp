@@ -1,45 +1,45 @@
 using ServerApp.Core;
 using ServerApp.ExecutionHost;
 using TheSingularityWorkshop.FSM_COS;
-using TheSingularityWorkshop.Foundry;
+using TheSingularityWorkshop.Execution;
 using TheSingularityWorkshop.MicroBundleDomain;
 
 internal static class Program
 {
     private static async Task Main()
     {
-        await SuccessfulRoleActivationIsAFoundryWorkflow();
-        await FailedRoleActivationFailsTheFoundryWorkflow();
+        await SuccessfulRoleActivationIsAExecutionWorkflow();
+        await FailedRoleActivationFailsTheExecutionWorkflow();
         await DuplicatePendingInstanceIsRejected();
         await AcceptedWorkflowCanBeCancelled();
         await RunningWorkflowCanBeCancelled();
-        await ComposedRoleUsesFoundryAndFsmCos();
+        await ComposedRoleUsesExecutionAndFsmCos();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
-    private static async Task SuccessfulRoleActivationIsAFoundryWorkflow()
+    private static async Task SuccessfulRoleActivationIsAExecutionWorkflow()
     {
         await using var host = new ExecutionProvisioningHost(new[] { new ReadyRoleAdapter() });
         var submission = host.Submit(CreateManifest("instance-ready"));
         Assert(submission.Status == WorkflowRunStatus.Accepted, "submission should be accepted but not started");
 
         var result = await host.StartAsync(submission.RunId);
-        Assert(result.Status == WorkflowStatus.Succeeded, "ready role should complete its Foundry workflow");
+        Assert(result.Status == WorkflowStatus.Succeeded, "ready role should complete its Execution workflow");
         Assert(host.GetSnapshot(submission.RunId).Status == WorkflowRunStatus.Succeeded,
-            "Foundry should own the terminal workflow status");
+            "Execution should own the terminal workflow status");
         Assert(host.GetProvisioningResult(submission.RunId)?.IsReady == true,
             "ServerApp should report Ready only from the role adapter result");
     }
 
-    private static async Task FailedRoleActivationFailsTheFoundryWorkflow()
+    private static async Task FailedRoleActivationFailsTheExecutionWorkflow()
     {
         await using var host = new ExecutionProvisioningHost(new[] { new NotReadyRoleAdapter() });
         var submission = host.Submit(CreateManifest("instance-failed"));
         var result = await host.StartAsync(submission.RunId);
 
-        Assert(result.Status == WorkflowStatus.Failed, "a role that does not become Ready must fail its Foundry workflow");
+        Assert(result.Status == WorkflowStatus.Failed, "a role that does not become Ready must fail its Execution workflow");
         Assert(host.GetProvisioningResult(submission.RunId)?.State == ServerInstanceState.Failed,
             "the structured ServerApp failure result should remain observable");
     }
@@ -58,7 +58,7 @@ internal static class Program
             rejected = true;
         }
 
-        Assert(rejected, "a duplicate pending instance must not create a second Foundry run");
+        Assert(rejected, "a duplicate pending instance must not create a second Execution run");
         await host.StartAsync(first.RunId);
     }
 
@@ -68,7 +68,7 @@ internal static class Program
         var submission = host.Submit(CreateManifest("instance-cancelled"));
         Assert(host.Cancel(submission.RunId), "an accepted workflow should be cancellable before start");
         Assert(host.GetSnapshot(submission.RunId).Status == WorkflowRunStatus.Cancelled,
-            "Foundry should record the accepted run as cancelled");
+            "Execution should record the accepted run as cancelled");
     }
 
     private static async Task RunningWorkflowCanBeCancelled()
@@ -81,12 +81,12 @@ internal static class Program
 
         Assert(host.Cancel(submission.RunId), "a running workflow should accept a cooperative cancellation request");
         var result = await execution;
-        Assert(result.Status == WorkflowStatus.Cancelled, "Foundry should report the running workflow as cancelled");
+        Assert(result.Status == WorkflowStatus.Cancelled, "Execution should report the running workflow as cancelled");
         Assert(host.GetSnapshot(submission.RunId).Status == WorkflowRunStatus.Cancelled,
-            "the retained Foundry snapshot should record cancellation");
+            "the retained Execution snapshot should record cancellation");
     }
 
-    private static async Task ComposedRoleUsesFoundryAndFsmCos()
+    private static async Task ComposedRoleUsesExecutionAndFsmCos()
     {
         var loadOrder = new List<ulong>();
         var dependency = new TestBundle(101, "1.0.0", loadOrder);
@@ -103,10 +103,10 @@ internal static class Program
         await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter }, observer);
 
         var submission = host.Submit(CreateManifest("instance-composed", "contract.composed"));
-        Assert(submission.Status == WorkflowRunStatus.Accepted, "composed role request should be accepted by Foundry");
+        Assert(submission.Status == WorkflowRunStatus.Accepted, "composed role request should be accepted by Execution");
         var result = await host.StartAsync(submission.RunId);
 
-        Assert(result.Status == WorkflowStatus.Succeeded, "Foundry should complete composition and activation steps");
+        Assert(result.Status == WorkflowStatus.Succeeded, "Execution should complete composition and activation steps");
         Assert(host.GetProvisioningResult(submission.RunId)?.IsReady == true,
             "ServerApp should report Ready only after the role runtime adapter confirms it");
         Assert(adapter.ReceivedAssembly is not null, "the role adapter should receive the FSM_COS RuntimeAssembly");
@@ -117,7 +117,7 @@ internal static class Program
             "the host should retain the composed assembly for the successfully activated role");
         var observations = observer.Observations.ToArray();
         Assert(observations.All(item => item.RunId == submission.RunId),
-            "every observation must correlate to the authoritative Foundry RunId");
+            "every observation must correlate to the authoritative Execution RunId");
         Assert(observations.Select(item => item.Sequence).SequenceEqual(
             observations.Select(item => item.Sequence).OrderBy(value => value)),
             "observation sequence must be monotonic for one run");
@@ -129,7 +129,7 @@ internal static class Program
         Assert(!observations.Any(item => item.Phase == "bundle" && item.Status.StartsWith("invoked", StringComparison.Ordinal)),
             "loaded assembly membership must never be represented as per-bundle invocation");
         Assert(observations.Any(item => item.Phase == "workflow" && item.Status == "succeeded"),
-            "the terminal Foundry workflow result must be observed");
+            "the terminal Execution workflow result must be observed");
     }
 
     private static async Task CompositionFailurePreventsRoleActivation()
@@ -147,7 +147,7 @@ internal static class Program
         var submission = host.Submit(CreateManifest("instance-compose-fail", "contract.missing"));
         var result = await host.StartAsync(submission.RunId);
 
-        Assert(result.Status == WorkflowStatus.Failed, "missing MicroBundle composition should fail the Foundry workflow");
+        Assert(result.Status == WorkflowStatus.Failed, "missing MicroBundle composition should fail the Execution workflow");
         Assert(adapter.StartCount == 0, "role activation must not run when FSM_COS composition fails");
         Assert(host.GetProvisioningResult(submission.RunId)?.State == ServerInstanceState.Failed,
             "composition failure should remain observable as a ServerApp provisioning failure");
@@ -168,7 +168,7 @@ internal static class Program
         var submission = host.Submit(CreateManifest("instance-role-not-ready", "contract.not-ready"));
         var result = await host.StartAsync(submission.RunId);
 
-        Assert(result.Status == WorkflowStatus.Failed, "role adapter refusal must fail the Foundry workflow");
+        Assert(result.Status == WorkflowStatus.Failed, "role adapter refusal must fail the Execution workflow");
         Assert(host.GetProvisioningResult(submission.RunId)?.IsReady == false,
             "a composed but unready role must not be reported Ready");
         Assert(host.GetRuntimeAssembly(submission.RunId) is null,
