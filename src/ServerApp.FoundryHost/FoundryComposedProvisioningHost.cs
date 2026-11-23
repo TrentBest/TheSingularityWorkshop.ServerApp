@@ -20,6 +20,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
     private const string ActivateHandler = "serverapp.activate-role";
 
     private readonly ServerRoleRuntimeComposer _composer;
+    private readonly IServerRoleExecutionObserver? _observer;
     private readonly IReadOnlyDictionary<string, IServerRoleRuntimeAdapter> _adapters;
     private readonly WorkflowExecutionCoordinator _workflows;
     private readonly ConcurrentDictionary<Guid, OperationState> _operations = new();
@@ -28,9 +29,11 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
 
     public FoundryComposedProvisioningHost(
         ServerRoleRuntimeComposer composer,
-        IEnumerable<IServerRoleRuntimeAdapter> adapters)
+        IEnumerable<IServerRoleRuntimeAdapter> adapters,
+        IServerRoleExecutionObserver? observer = null)
     {
         _composer = composer ?? throw new ArgumentNullException(nameof(composer));
+        _observer = observer;
         ArgumentNullException.ThrowIfNull(adapters);
 
         var map = new Dictionary<string, IServerRoleRuntimeAdapter>(StringComparer.Ordinal);
@@ -93,6 +96,7 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
 
             var snapshot = _workflows.Submit(definition, context);
             _runOperations.TryAdd(snapshot.RunId, operationId);
+            Observe(snapshot.RunId, state, "workflow", "accepted", detail: "Foundry accepted the provisioning run.");
             return snapshot;
         }
         catch
@@ -108,7 +112,18 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
     {
         try
         {
-            return await _workflows.StartAsync(runId, timeout).ConfigureAwait(false);
+            if (TryGetOperation(runId, out var startedState))
+                Observe(runId, startedState, "workflow", "started");
+            var result = await _workflows.StartAsync(runId, timeout).ConfigureAwait(false);
+            if (TryGetOperation(runId, out var completedState))
+                Observe(runId, completedState, "workflow", result.Status.ToString().ToLowerInvariant());
+            return result;
+        }
+        catch (Exception exception)
+        {
+            if (TryGetOperation(runId, out var failedState))
+                Observe(runId, failedState, "workflow", "exception", detail: exception.GetType().Name);
+            throw;
         }
         finally
         {
@@ -193,18 +208,24 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
 
         try
         {
+            Observe(context, state, "composition", "started");
             state.Assembly = _composer.Compose(definition);
+            foreach (var bundle in state.Assembly.LoadedBundles)
+                Observe(context, state, "bundle", "loaded", state.Assembly.RuntimeId, bundle.Id, bundle.Descriptor.Version);
+            Observe(context, state, "composition", "succeeded", state.Assembly.RuntimeId);
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.CompletedTask;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            Observe(context, state, "composition", "cancelled", state.Assembly?.RuntimeId);
             if (state.Assembly is not null)
                 _composer.Forget(state.Assembly.RuntimeId);
             throw;
         }
         catch (Exception exception)
         {
+            Observe(context, state, "composition", "failed", state.Assembly?.RuntimeId, detail: exception.GetType().Name);
             state.Result = Failed(state.Manifest, $"FSM_COS composition failed: {exception.GetType().Name}: {exception.Message}");
             throw;
         }
@@ -223,7 +244,18 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
                 throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by the host registry.");
 
             var adapter = _adapters[state.Manifest.RoleId];
-            var start = await adapter.StartAsync(state.Manifest, assembly, cancellationToken).ConfigureAwait(false);
+            Observe(context, state, "role-adapter", "invocation-started", assembly.RuntimeId, detail: adapter.RoleId);
+            RoleStartResult start;
+            try
+            {
+                start = await adapter.StartAsync(state.Manifest, assembly, cancellationToken).ConfigureAwait(false);
+                Observe(context, state, "role-adapter", start.IsReady ? "completed-ready" : "completed-not-ready", assembly.RuntimeId, detail: adapter.RoleId);
+            }
+            catch (Exception exception)
+            {
+                Observe(context, state, "role-adapter", "failed", assembly.RuntimeId, detail: $"{adapter.RoleId}:{exception.GetType().Name}");
+                throw;
+            }
             if (!start.IsReady)
                 throw new InvalidOperationException(start.Detail);
 
@@ -247,6 +279,29 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
             state.Assembly = null;
             state.Result = Failed(state.Manifest, $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
             throw;
+        }
+    }
+
+    private void Observe(WorkflowExecutionContext context, OperationState state, string phase, string status,
+        ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null) =>
+        Observe(context.GetInput<Guid>(OperationIdInput), state, phase, status, runtimeId, bundleId, bundleVersion, detail);
+
+    private void Observe(Guid runId, OperationState state, string phase, string status,
+        ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null)
+    {
+        if (_observer is null || !_runOperations.ContainsKey(runId))
+            return;
+
+        var observation = new ServerRoleExecutionObservation(
+            runId, Interlocked.Increment(ref state.ObservationSequence), phase, status,
+            DateTimeOffset.UtcNow, runtimeId, bundleId, bundleVersion, detail);
+        try
+        {
+            _observer.OnObservation(observation);
+        }
+        catch
+        {
+            // Telemetry must never change the provisioning result or suppress cleanup.
         }
     }
 
@@ -291,5 +346,6 @@ public sealed class FoundryComposedProvisioningHost : IAsyncDisposable
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }
+        public long ObservationSequence;
     }
 }
