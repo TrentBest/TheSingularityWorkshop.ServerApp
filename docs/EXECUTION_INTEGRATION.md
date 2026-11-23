@@ -68,11 +68,11 @@ The Execution development source exposes:
 - `WorkflowRunner`: validates the complete definition before handler side effects, executes handlers sequentially, stops after failure, and reports structured outcomes.
 
 Source references:
-- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowDefinition.cs)
-- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowHandlerRegistry.cs)
-- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowExecutionContext.cs)
-- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowRunner.cs)
-- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Foundry.Workflow/WorkflowExecutionCoordinator.cs)
+- [WorkflowDefinition.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Execution.Workflow/WorkflowDefinition.cs)
+- [WorkflowHandlerRegistry.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Execution.Workflow/WorkflowHandlerRegistry.cs)
+- [WorkflowExecutionContext.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Execution.Workflow/WorkflowExecutionContext.cs)
+- [WorkflowRunner.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Execution.Workflow/WorkflowRunner.cs)
+- [WorkflowExecutionCoordinator.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/src/Execution.Workflow/WorkflowExecutionCoordinator.cs)
 - [Execution architecture](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution/blob/development/docs/ARCHITECTURE.md)
 
 FSM_COS source exposes `FsmCos.Execute` / `TryExecute`, `RuntimeManifest`, and `RuntimeAssembly`. The assembly contains composed MicroBundles; it is not itself a started server process or a Execution workflow. See [FsmCos.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/FsmCos.cs), [RuntimeManifest.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeManifest.cs), and [RuntimeAssembly.cs](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS/blob/development/src/FSM_COS/RuntimeAssembly.cs).
@@ -95,23 +95,23 @@ Execution workflow success means every registered step completed. ServerApp's `R
 
 ## 5. Dependency and build strategy
 
-Both Execution and FSM_COS are built from pinned source; no new NuGet package is required or published. CI checks out these exact revisions:
+Execution's identity migration is currently supplied by the exact reviewed source revision below; FSM_COS and the other dependencies are also pinned. No new NuGet package is required or published. The Execution pin is the validated source head of FSM_Execution PR #43; it must remain an immutable SHA pin until that migration is integrated into `development`. CI checks out these exact revisions:
 
 | Repository | Commit |
 |---|---|
-| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution) | `8bd3487a96af2cd7d667f62c4566a499bafe30dc` |
+| [Execution](https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution) | `0561be668e3986c671d34b1e4a7b9da33fa68cd6` |
 | [FSM_COS](https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS) | `cad5775fe55a6a8d0b6df8bbd22017c1179141c4` |
 | [FSM_API](https://github.com/TrentBest/FSM_API) | `4db572f5e0e74df028b01ee22fb393e2bd203eb6` |
 | [FSM_UserIO](https://github.com/TrentBest/FSM_UserIO) | `db5b59d0521a341f97e6077e3508eb2bd7171607` |
 | [MicroBundleDomain](https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain) | `d8c1f52d3550591aec2337ad4470bfadb20fb11e` |
 
-FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/Foundry/src/Foundry.Workflow/Foundry.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
+FSM_COS source mode expects the sibling directory name `_deps/TheSingularityWorkshop.MicroBundleDomain`; the CI checkout uses that exact name. The host project references `_deps/FSM_Execution/src/Execution.Workflow/Execution.Workflow.csproj` and `_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj`. Build with `-p:WorkshopUseRepositorySources=true` so FSM_COS uses the pinned FSM_API, FSM_UserIO, and MicroBundleDomain source projects instead of package references.
 
 For a local checkout from the ServerApp repository root:
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
+git -C _deps/FSM_Execution checkout 0561be668e3986c671d34b1e4a7b9da33fa68cd6
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -125,11 +125,6 @@ dotnet run --project tests/ServerApp.ExecutionHost.ContractChecks/ServerApp.Exec
 ```
 
 A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Execution and FSM_COS. CI passed with 10 documentation/compiler warnings originating in the pinned FSM_API and FSM_COS source projects; there were zero build errors, and the ServerApp contract executables passed. No package publication is authorized.
-
-
-### Transitional source-compatibility note
-
-The host-facing ServerApp surface is now named **Execution**. The pinned FSM_Execution repository still exposes the workflow assembly through its legacy source path `src/Foundry.Workflow/Foundry.Workflow.csproj` and compatibility namespace `TheSingularityWorkshop.Foundry`. ServerApp deliberately keeps that dependency path and namespace at the adapter boundary until the dependency repository completes its coordinated project/namespace migration; this rename does not invent a new assembly identity or break persisted workflow contracts. The CI checkout uses the renamed repository `TheSingularityWorkshop.FSM_Execution` at the existing verified commit, mounted at `_deps/Foundry` solely to satisfy that transitional project path.
 
 ## 6. Run-correlated host observations
 
