@@ -14,7 +14,7 @@ The competitive ladder is an application composed on ServerApp. It is not the de
 - **StarCraft II** is the first external game integration and demonstration workload. Its rules, SC2 session adapter, replay interpretation, and game-specific configuration belong in a separate StarCraft II ladder experience/application repository. That repository supplies MicroBundles; ServerApp remains the generic host and must not become a special-case SC2 execution engine.
 - **SingularityBot** is a game-playing client/runtime. It owns its game strategy, normalized observations, intents, and validated SC2 actions. It is not the ladder, matchmaking service, or authoritative result source.
 - **FSM_COS** composes approved MicroBundles into a RuntimeAssembly.
-- **FSM_Foundry** executes the host-authored workflow and owns workflow lifecycle.
+- **FSM_Execution** executes the host-authored workflow and owns workflow lifecycle.
 - **FSM_API** supplies the state/context execution primitives used by the composed runtime.
 
 The existing [Fleet Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/) remains the general fleet/platform demonstration. The [Competitive Ladder Lab](https://trentbest.github.io/TheSingularityWorkshop.ServerApp/competitive-ladder/) demonstrates one composed application. Both are static GitHub Pages presentations, not service endpoints.
