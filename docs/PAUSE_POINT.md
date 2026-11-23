@@ -11,7 +11,7 @@
 - Economy issue [#30](https://github.com/TrentBest/TheSingularityWorkshop.Economy/issues/30) tracks the deterministic multi-institution market simulation.
 - ServerApp now has source for `src/ServerApp.Core/SimulationMessageFabric.cs`: host-registered participants, finite accepted-message vocabularies, run-scoped envelopes, deterministic virtual-step/enqueue ordering, expiry, duplicate-ID handling, handler-failure isolation, and trace evidence. It is process-local, volatile, single-host, sequential, and not a distributed broker. Six new contract checks are present; CI verification is pending.
 - Economy now has source for `MarketEconomyScenario.Run()`, using the existing `SimulationLedger` for a fictional central-bank treasury, commercial-bank clearing/reserves, employer, household deposit, and merchant. Five scenario tests and a guide are present; CI verification is pending. The first scenario does not implement lending, deposit creation, securities, or external settlement.
-- Ownership remains explicit: Economy owns economic meaning and ledger semantics; ServerApp owns participant hosting and coordination; FSM_COS composes; FSM_Foundry executes host-authored workflows; CiAi is the development/research plane, not runtime authority.
+- Ownership remains explicit: Economy owns economic meaning and ledger semantics; ServerApp owns participant hosting and coordination; FSM_COS composes; FSM_Execution executes host-authored workflows; CiAi is the development/research plane, not runtime authority.
 - Branch inventory currently includes `development`, `master`, and the pre-existing `work/candidate-scoped-composition-sessions` branch associated with PR #3. Do not delete that branch while its PR work remains unresolved. The permanent target remains exactly `master` and `development`.
 - No NuGet publication, public endpoint exposure, production deployment, merge to `master`, release, or branch deletion is authorized by this checkpoint. The new authorization covers building and validating the simulation capabilities, not claiming production readiness.
 
@@ -21,7 +21,7 @@
 - Active work branch: `development`; `master` remains the released/stable baseline.
 - Branch inventory last inspected: `development`, `master`, and the pre-existing `work/candidate-scoped-composition-sessions` branch. The owner controls branch deletion.
 - Current workstream: StarCraft II competitive ladder hosting, with DataWarehouse deliberately adopted as the hot in-memory catalogue technology to showcase and harden it.
-- ServerApp owns hosting/competition operations; SingularityBot remains independent player intelligence. FSM_COS composes approved MicroBundles, FSM_Foundry executes host-authored workflows, and FSM_API remains the state/context/process-group primitive.
+- ServerApp owns hosting/competition operations; SingularityBot remains independent player intelligence. FSM_COS composes approved MicroBundles, FSM_Execution executes host-authored workflows, and FSM_API remains the state/context/process-group primitive.
 - No NuGet publication, merge to `master`, external release, production deployment, public ladder endpoint exposure, or branch deletion is authorized by this checkpoint.
 
 ## Competitive ladder implementation
@@ -65,7 +65,7 @@
 
 ## Platform invariants
 
-- FSM_COS owns composition; FSM_API provides state/context/process-group primitives; FSM_Foundry owns host workflow execution/lifecycle.
+- FSM_COS owns composition; FSM_API provides state/context/process-group primitives; FSM_Execution owns host workflow execution/lifecycle.
 - ServerApp provisions and operates server roles and composed applications; it does not become a second FSM_COS or absorb SingularityBot strategy.
 - Preserve exact bot build identity and SHA-256 content provenance through admission and match records.
 - The game-session host/adapter—not a bot's own claim—is the authoritative source of terminal match evidence.
