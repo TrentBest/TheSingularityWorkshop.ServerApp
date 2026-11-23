@@ -6,13 +6,14 @@
     "master"
   ],
   "actual_branches": [
+    "chore/retire-fsm-foundry-reference",
     "development",
     "master",
     "work/candidate-scoped-composition-sessions"
   ],
-  "branch_count": 3,
+  "branch_count": 4,
   "status": "NON-COMPLIANT",
-  "evaluated_at": "2026-11-22T12:34:39Z",
-  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45022985439",
-  "triggering_commit": "3f7120680df247bcf5a9ea729c880ed9ce1ee1bb"
+  "evaluated_at": "2026-11-23T14:36:27Z",
+  "workflow_run": "https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45195973308",
+  "triggering_commit": "2c8ce66846591bf18a1369495f69b9893dfd928d"
 }
