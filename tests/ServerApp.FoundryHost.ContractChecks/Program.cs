@@ -16,6 +16,7 @@ internal static class Program
         await ComposedRoleUsesFoundryAndFsmCos();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
+        await HostObservationsSeparateLoadedBundlesFromRoleInvocation();
         Console.WriteLine("All ServerApp Foundry host contract checks passed.");
     }
 
@@ -159,6 +160,40 @@ internal static class Program
             "a failed activation must not remain advertised as the active runtime assembly");
     }
 
+    private static async Task HostObservationsSeparateLoadedBundlesFromRoleInvocation()
+    {
+        var bundle = new TestBundle(300, "1.2.3", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.observed",
+            new[] { new MicroBundleManifestEntry(300, "1.2.3") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var adapter = new RecordingRuntimeAdapter("contract.observed", isReady: true);
+        var observer = new RecordingExecutionObserver();
+        await using var host = new FoundryComposedProvisioningHost(composer, new[] { adapter }, observer);
+
+        var submission = host.Submit(CreateManifest("instance-observed", "contract.observed"));
+        var result = await host.StartAsync(submission.RunId);
+        var observations = observer.Observations.ToArray();
+
+        Assert(result.Status == WorkflowStatus.Succeeded, "observed composition and activation should succeed");
+        Assert(observations.All(item => item.RunId == submission.RunId),
+            "every observation must correlate to the authoritative Foundry RunId");
+        Assert(observations.Select(item => item.Sequence).SequenceEqual(
+            observations.Select(item => item.Sequence).OrderBy(value => value)),
+            "observation sequence must be monotonic for one run");
+        Assert(observations.Any(item => item.Phase == "bundle" && item.Status == "loaded" &&
+            item.BundleId == 300 && item.BundleVersion == "1.2.3"),
+            "the host must report the exact loaded bundle identity from RuntimeAssembly");
+        Assert(observations.Any(item => item.Phase == "role-adapter" && item.Status == "invocation-started"),
+            "the host must report the actual role-adapter invocation boundary");
+        Assert(!observations.Any(item => item.Phase == "bundle" && item.Status.StartsWith("invoked", StringComparison.Ordinal)),
+            "loaded assembly membership must never be represented as per-bundle invocation");
+        Assert(observations.Any(item => item.Phase == "workflow" && item.Status == "succeeded"),
+            "the terminal Foundry workflow result must be observed");
+    }
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -181,6 +216,13 @@ internal static class Program
     {
         if (!condition)
             throw new InvalidOperationException(message);
+    }
+
+    private sealed class RecordingExecutionObserver : IServerRoleExecutionObserver
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<ServerRoleExecutionObservation> _observations = new();
+        public IReadOnlyCollection<ServerRoleExecutionObservation> Observations => _observations.ToArray();
+        public void OnObservation(ServerRoleExecutionObservation observation) => _observations.Enqueue(observation);
     }
 
     private sealed class ReadyRoleAdapter : IServerRoleAdapter
