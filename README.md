@@ -105,8 +105,8 @@ dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csp
 To build and run the composed Execution/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
+git -C _deps/FSM_Execution checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
