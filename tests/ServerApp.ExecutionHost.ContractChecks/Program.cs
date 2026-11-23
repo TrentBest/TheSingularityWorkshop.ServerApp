@@ -116,6 +116,8 @@ internal static class Program
         Assert(host.GetRuntimeAssembly(submission.RunId)?.RuntimeId == adapter.ReceivedAssembly.RuntimeId,
             "the host should retain the composed assembly for the successfully activated role");
         var observations = observer.Observations.ToArray();
+        Console.WriteLine("Loaded bundle identities: " + string.Join(", ", adapter.ReceivedAssembly!.LoadedBundles.Select(bundle => $"{bundle.Id}@{bundle.Descriptor.Version}")));
+        Console.WriteLine("Observed bundle events: " + string.Join(", ", observations.Where(item => item.Phase == "bundle").Select(item => $"{item.Status}:{item.BundleId}@{item.BundleVersion}")));
         Assert(observations.All(item => item.RunId == submission.RunId),
             "every observation must correlate to the authoritative Execution RunId");
         Assert(observations.Select(item => item.Sequence).SequenceEqual(
