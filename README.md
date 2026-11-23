@@ -31,7 +31,7 @@ These roles have different security, state, scaling, and resource requirements. 
 | AnyApp | Desktop host and presentation. |
 | WebApp | Browser-facing host and presentation. |
 | ServerApp | Server-role provisioning, hosting, fleet operations, and bounded routing. |
-| Foundry | Owns provisioning workflow execution and lifecycle; the composed ServerApp workflow runs FSM_COS composition and role activation as registered steps. |
+| FSM_Execution | Owns provisioning workflow execution and lifecycle; the composed ServerApp workflow runs FSM_COS composition and role activation as registered steps. |
 | Renderer | Visual output representation and potential reduction of server computation/traffic. |
 | Domains | External identity/facade and policy for Experiences. |
 | Experiences | Interactive content and runtime state. |
