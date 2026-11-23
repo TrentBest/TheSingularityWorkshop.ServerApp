@@ -10,7 +10,7 @@ public interface IServerRoleExecutionObserver
 }
 
 /// <summary>
-/// A factual observation emitted at a ServerApp/Foundry/FSM_COS boundary.
+/// A factual observation emitted at a ServerApp/Execution/FSM_COS boundary.
 /// Bundle observations describe membership in the returned RuntimeAssembly only.
 /// </summary>
 public sealed record ServerRoleExecutionObservation(
