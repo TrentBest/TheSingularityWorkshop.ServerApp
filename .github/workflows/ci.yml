@@ -15,12 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Checkout Foundry workflow source (pinned)
+      - name: Checkout Execution workflow source (pinned)
         uses: actions/checkout@v4
         with:
-          repository: TrentBest/TheSingularityWorkshop.Foundry
-          ref: 8bd3487a96af2cd7d667f62c4566a499bafe30dc
-          path: _deps/Foundry
+          repository: TrentBest/TheSingularityWorkshop.FSM_Execution
+          ref: 0561be668e3986c671d34b1e4a7b9da33fa68cd6
+          path: _deps/FSM_Execution
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
         with:
@@ -73,9 +73,9 @@ jobs:
       - name: Build machine report utility
         run: |
           dotnet build src/ServerApp.MachineReport/ServerApp.MachineReport.csproj --configuration Release
-      - name: Build Foundry host integration
+      - name: Build Execution host integration
         run: |
-          dotnet build src/ServerApp.FoundryHost/ServerApp.FoundryHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
+          dotnet build src/ServerApp.ExecutionHost/ServerApp.ExecutionHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
       - name: Run core contract checks
         run: |
           dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
@@ -88,6 +88,6 @@ jobs:
       - name: Run file-store durability contract checks
         run: |
           dotnet run --project tests/ServerApp.FileStore.ContractChecks/ServerApp.FileStore.ContractChecks.csproj --configuration Release
-      - name: Run Foundry host contract checks
+      - name: Run Execution host contract checks
         run: |
-          dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
+          dotnet run --project tests/ServerApp.ExecutionHost.ContractChecks/ServerApp.ExecutionHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
