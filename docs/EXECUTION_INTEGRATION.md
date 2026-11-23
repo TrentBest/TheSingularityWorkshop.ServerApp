@@ -126,6 +126,11 @@ dotnet run --project tests/ServerApp.ExecutionHost.ContractChecks/ServerApp.Exec
 
 A floating branch checkout is not acceptable verification. `ServerApp.Core` remains independent of Execution and FSM_COS. CI passed with 10 documentation/compiler warnings originating in the pinned FSM_API and FSM_COS source projects; there were zero build errors, and the ServerApp contract executables passed. No package publication is authorized.
 
+
+### Transitional source-compatibility note
+
+The host-facing ServerApp surface is now named **Execution**. The pinned FSM_Execution repository still exposes the workflow assembly through its legacy source path `src/Foundry.Workflow/Foundry.Workflow.csproj` and compatibility namespace `TheSingularityWorkshop.Foundry`. ServerApp deliberately keeps that dependency path and namespace at the adapter boundary until the dependency repository completes its coordinated project/namespace migration; this rename does not invent a new assembly identity or break persisted workflow contracts. The CI checkout uses the renamed repository `TheSingularityWorkshop.FSM_Execution` at the existing verified commit, mounted at `_deps/Foundry` solely to satisfy that transitional project path.
+
 ## 6. Run-correlated host observations
 
 `ExecutionComposedProvisioningHost` now accepts an optional `IServerRoleExecutionObserver`. It emits immutable `ServerRoleExecutionObservation` records with the authoritative Execution `RunId`, a per-operation monotonic sequence, timestamp, phase/status, and optional exact runtime/bundle identity.
