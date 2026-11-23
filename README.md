@@ -105,8 +105,8 @@ dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csp
 To build and run the composed Execution/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Execution.git _deps/Execution
-git -C _deps/Execution checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
+git -C _deps/Execution checkout 0561be668e3986c671d34b1e4a7b9da33fa68cd6
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -118,7 +118,7 @@ git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591ae
 dotnet run --project tests/ServerApp.ExecutionHost.ContractChecks/ServerApp.ExecutionHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Execution workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Execution Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Execution workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Execution Integration](docs/EXECUTION_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 07 — Documentation and next steps
 
