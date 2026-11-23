@@ -31,7 +31,7 @@ These roles have different security, state, scaling, and resource requirements. 
 | AnyApp | Desktop host and presentation. |
 | WebApp | Browser-facing host and presentation. |
 | ServerApp | Server-role provisioning, hosting, fleet operations, and bounded routing. |
-| Foundry | Owns provisioning workflow execution and lifecycle; the composed ServerApp workflow runs FSM_COS composition and role activation as registered steps. |
+| Execution | Owns provisioning workflow execution and lifecycle; the composed ServerApp workflow runs FSM_COS composition and role activation as registered steps. |
 | Renderer | Visual output representation and potential reduction of server computation/traffic. |
 | Domains | External identity/facade and policy for Experiences. |
 | Experiences | Interactive content and runtime state. |
@@ -81,7 +81,7 @@ dotnet run --project .\tests\ServerApp.DataWarehouse.ContractChecks\ServerApp.Da
 
 The bot-build registry now has a concrete database-free file store in `src/ServerApp.FileStore`. It appends checksummed binary revision frames containing only changed registrations/removals, arbitrates writers across processes, performs revision compare-and-swap, and flushes before acknowledging a commit. Startup validates a compact checkpoint and replays the journal; an incomplete final frame is treated as a torn tail, while complete corruption and unknown schema versions fail closed. `CompactAsync` installs a full checkpoint before rotating the journal. The DataWarehouse coordinator still commits durable state before publishing its replacement hot catalogue. The store is intentionally outside the default solution and is built/tested explicitly by CI, preserving dependency-free ServerApp Core consumers. Its disk-recovery contract checks are in `tests/ServerApp.FileStore.ContractChecks`; CI execution is the next verification gate, so source implementation must not yet be described as a passing durability proof. See [Competitive Ladder Composition](docs/COMPETITIVE_LADDER_COMPOSITION.md) and issue [#9](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/9).
 
-The Foundry host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
+The Execution host integration and its contract checks remain source-integrated projects that additionally require the other pinned repositories under `_deps`; CI checks those separately.
 
 ## 🟢 05 — Inspect a deployment machine
 
@@ -95,18 +95,18 @@ Run this on the intended ServerApp host machine, then paste the copied report in
 
 ## 🟢 06 — See it in a minute
 
-The local manifest-to-ready proof and the first Foundry workflow host integration are source-implemented. With the .NET 10 SDK, run the diagnostic Core checks:
+The local manifest-to-ready proof and the first Execution workflow host integration are source-implemented. With the .NET 10 SDK, run the diagnostic Core checks:
 
 ```bash
 dotnet run --project src/ServerApp.Cli/ServerApp.Cli.csproj -- examples/diagnostic-ready.serverapp.json
 dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj
 ```
 
-To build and run the composed Foundry/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
+To build and run the composed Execution/FSM_COS integration checks, first place the other five source repositories at the exact revisions used by CI (DataWarehouse is listed above):
 
 ```bash
-git clone https://github.com/TrentBest/TheSingularityWorkshop.Foundry.git _deps/Foundry
-git -C _deps/Foundry checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
+git clone https://github.com/TrentBest/TheSingularityWorkshop.Execution.git _deps/Execution
+git -C _deps/Execution checkout 8bd3487a96af2cd7d667f62c4566a499bafe30dc
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
@@ -115,16 +115,16 @@ git clone https://github.com/TrentBest/FSM_UserIO.git _deps/FSM_UserIO
 git -C _deps/FSM_UserIO checkout db5b59d0521a341f97e6077e3508eb2bd7171607
 git clone https://github.com/TrentBest/TheSingularityWorkshop.MicroBundleDomain.git _deps/TheSingularityWorkshop.MicroBundleDomain
 git -C _deps/TheSingularityWorkshop.MicroBundleDomain checkout d8c1f52d3550591aec2337ad4470bfadb20fb11e
-dotnet run --project tests/ServerApp.FoundryHost.ContractChecks/ServerApp.FoundryHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
+dotnet run --project tests/ServerApp.ExecutionHost.ContractChecks/ServerApp.ExecutionHost.ContractChecks.csproj --configuration Release -p:WorkshopUseRepositorySources=true
 ```
 
-The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Foundry workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Foundry Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
+The diagnostic adapter and composed role adapters are in-process fixtures; the composed contract checks exercise actual FSM_COS composition and Execution workflow execution, but they open no network port and do not prove repository-backed artifact verification or production/distributed hosting. See [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) and [Execution Integration](docs/FOUNDRY_INTEGRATION.md) for boundaries and limitations.
 
 ## 🟪 07 — Documentation and next steps
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — the first in-process message transport contract, ordering, expiry, duplicate handling, evidence, and limits.
-- [Foundry Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
+- [Execution Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
