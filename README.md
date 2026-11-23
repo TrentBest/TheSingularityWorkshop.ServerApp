@@ -106,7 +106,7 @@ To build and run the composed Execution/FSM_COS integration checks, first place 
 
 ```bash
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_Execution.git _deps/FSM_Execution
-git -C _deps/Execution checkout 0561be668e3986c671d34b1e4a7b9da33fa68cd6
+git -C _deps/FSM_Execution checkout 0561be668e3986c671d34b1e4a7b9da33fa68cd6
 git clone https://github.com/TrentBest/TheSingularityWorkshop.FSM_COS.git _deps/FSM_COS
 git -C _deps/FSM_COS checkout cad5775fe55a6a8d0b6df8bbd22017c1179141c4
 git clone https://github.com/TrentBest/FSM_API.git _deps/FSM_API
