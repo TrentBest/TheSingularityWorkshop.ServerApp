@@ -2,14 +2,14 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using ServerApp.Core;
 using TheSingularityWorkshop.FSM_COS;
-using TheSingularityWorkshop.Foundry;
+using TheSingularityWorkshop.Execution;
 
 namespace ServerApp.ExecutionHost;
 
 /// <summary>
-/// Runs a complete role request through Foundry's workflow lifecycle:
+/// Runs a complete role request through Execution's workflow lifecycle:
 /// validate -> FSM_COS compose -> host role activation.
-/// Live RuntimeAssembly references remain in host-owned operation state; Foundry's bounded
+/// Live RuntimeAssembly references remain in host-owned operation state; Execution's bounded
 /// JSON workflow context carries only an opaque operation correlation ID.
 /// </summary>
 public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
@@ -54,7 +54,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         _workflows = new WorkflowExecutionCoordinator(handlers);
     }
 
-    /// <summary>Accepts a provisioning operation into Foundry without executing it.</summary>
+    /// <summary>Accepts a provisioning operation into Execution without executing it.</summary>
     public WorkflowRunSnapshot Submit(ServerRoleManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -95,8 +95,9 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 });
 
             var snapshot = _workflows.Submit(definition, context);
+            state.RunId = snapshot.RunId;
             _runOperations.TryAdd(snapshot.RunId, operationId);
-            Observe(snapshot.RunId, state, "workflow", "accepted", detail: "Foundry accepted the provisioning run.");
+            Observe(snapshot.RunId, state, "workflow", "accepted", detail: "Execution accepted the provisioning run.");
             return snapshot;
         }
         catch
@@ -107,7 +108,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Starts one accepted Foundry run and returns its authoritative workflow result.</summary>
+    /// <summary>Starts one accepted Execution run and returns its authoritative workflow result.</summary>
     public async Task<WorkflowResult> StartAsync(Guid runId, TimeSpan? timeout = null)
     {
         try
@@ -135,7 +136,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 {
                     if (snapshot.Status == WorkflowRunStatus.Cancelled &&
                         TryGetOperation(runId, out var state) && state.Result is null)
-                        state.Result = Cancelled(state.Manifest, "Foundry cancelled the provisioning workflow.");
+                        state.Result = Cancelled(state.Manifest, "Execution cancelled the provisioning workflow.");
 
                     ReleasePendingInstance(runId);
                 }
@@ -147,7 +148,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         }
     }
 
-    /// <summary>Requests cancellation through Foundry; running handlers must cooperate.</summary>
+    /// <summary>Requests cancellation through Execution; running handlers must cooperate.</summary>
     public bool Cancel(Guid runId)
     {
         var cancelled = _workflows.Cancel(runId);
@@ -155,9 +156,9 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         {
             if (TryGetOperation(runId, out var state))
             {
-                Observe(runId, state, "workflow", "cancelled", detail: "Foundry accepted cancellation.");
+                Observe(runId, state, "workflow", "cancelled", detail: "Execution accepted cancellation.");
                 if (state.Result is null)
-                    state.Result = Cancelled(state.Manifest, "Foundry cancelled the accepted provisioning workflow.");
+                    state.Result = Cancelled(state.Manifest, "Execution cancelled the accepted provisioning workflow.");
             }
             ReleasePendingInstance(runId);
         }
@@ -288,7 +289,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
 
     private void Observe(WorkflowExecutionContext context, OperationState state, string phase, string status,
         ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null) =>
-        Observe(context.GetInput<Guid>(OperationIdInput), state, phase, status, runtimeId, bundleId, bundleVersion, detail);
+        Observe(state.RunId, state, phase, status, runtimeId, bundleId, bundleVersion, detail);
 
     private void Observe(Guid runId, OperationState state, string phase, string status,
         ulong? runtimeId = null, ulong? bundleId = null, string? bundleVersion = null, string? detail = null)
@@ -347,6 +348,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
     private sealed class OperationState(ServerRoleManifest manifest)
     {
         public ServerRoleManifest Manifest { get; } = manifest;
+        public Guid RunId { get; set; }
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
         public ProvisioningResult? Result { get; set; }
