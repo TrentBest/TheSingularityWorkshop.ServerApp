@@ -29,42 +29,29 @@ public interface IServerRoleHostedComponentFactory
 }
 
 /// <summary>
-/// Supervised in-process implementation of the ServerApp role adapter contract.
-/// It starts only pre-registered component factories; it never launches shells, scripts,
+/// Supervised in-process implementation of one ServerApp role adapter.
+/// It starts only one pre-registered component factory; it never launches shells, scripts,
 /// arbitrary executable paths, or assemblies from downloaded artifact bytes.
 /// </summary>
 public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdapter
 {
-    private readonly IReadOnlyDictionary<string, IServerRoleHostedComponentFactory> _factories;
+    private readonly IServerRoleHostedComponentFactory _factory;
     private readonly ConcurrentDictionary<string, ActiveComponent> _active = new(StringComparer.Ordinal);
     private readonly TimeSpan _readinessTimeout;
 
     public InProcessServerRoleRuntimeAdapter(
-        IEnumerable<IServerRoleHostedComponentFactory> factories,
+        IServerRoleHostedComponentFactory factory,
         TimeSpan readinessTimeout)
     {
-        ArgumentNullException.ThrowIfNull(factories);
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        if (string.IsNullOrWhiteSpace(factory.RoleId))
+            throw new ArgumentException("The hosted component factory must declare a non-empty RoleId.", nameof(factory));
         if (readinessTimeout <= TimeSpan.Zero || readinessTimeout == Timeout.InfiniteTimeSpan)
             throw new ArgumentOutOfRangeException(nameof(readinessTimeout));
-
-        var map = new Dictionary<string, IServerRoleHostedComponentFactory>(StringComparer.Ordinal);
-        foreach (var factory in factories)
-        {
-            ArgumentNullException.ThrowIfNull(factory);
-            if (string.IsNullOrWhiteSpace(factory.RoleId))
-                throw new ArgumentException("Every hosted component factory must declare a non-empty RoleId.", nameof(factories));
-            if (!map.TryAdd(factory.RoleId, factory))
-                throw new ArgumentException($"Duplicate hosted component factory '{factory.RoleId}'.", nameof(factories));
-        }
-
-        _factories = map;
         _readinessTimeout = readinessTimeout;
     }
 
-    public string RoleId => throw new NotSupportedException(
-        "This adapter hosts multiple roles; use its explicit role allowlist.");
-
-    public IReadOnlyCollection<string> GetSupportedRoleIds() => _factories.Keys.ToArray();
+    public string RoleId => _factory.RoleId;
 
     public async ValueTask<RoleStartResult> StartAsync(
         ServerRoleManifest manifest,
@@ -73,12 +60,12 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(assembly);
-        if (!_factories.TryGetValue(manifest.RoleId, out var factory))
-            throw new InvalidOperationException($"No precompiled hosted component is registered for role '{manifest.RoleId}'.");
+        if (!string.Equals(manifest.RoleId, RoleId, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Adapter '{RoleId}' cannot host role '{manifest.RoleId}'.");
 
         var context = new ServerRoleHostedComponentContext(manifest, assembly);
-        var component = factory.Create(context)
-            ?? throw new InvalidOperationException($"Hosted component factory '{manifest.RoleId}' returned null.");
+        var component = _factory.Create(context)
+            ?? throw new InvalidOperationException($"Hosted component factory '{RoleId}' returned null.");
         var active = new ActiveComponent(component);
         if (!_active.TryAdd(manifest.InstanceId, active))
         {
@@ -98,11 +85,10 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException(
-                    $"Hosted component '{manifest.RoleId}' did not report readiness within {_readinessTimeout}.");
+                    $"Hosted component '{RoleId}' did not report readiness within {_readinessTimeout}.");
             }
 
-            return new RoleStartResult(true,
-                $"Precompiled hosted component '{manifest.RoleId}' reported readiness.");
+            return new RoleStartResult(true, $"Precompiled hosted component '{RoleId}' reported readiness.");
         }
         catch (Exception startException)
         {
@@ -113,7 +99,7 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
             catch (Exception cleanupException)
             {
                 throw new AggregateException(
-                    $"Hosted component '{manifest.RoleId}' failed to start and cleanup remains pending.",
+                    $"Hosted component '{RoleId}' failed to start and cleanup remains pending.",
                     startException, cleanupException);
             }
 

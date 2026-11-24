@@ -40,16 +40,6 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         foreach (var adapter in adapters)
         {
             ArgumentNullException.ThrowIfNull(adapter);
-            if (adapter is InProcessServerRoleRuntimeAdapter inProcessAdapter)
-            {
-                foreach (var roleId in inProcessAdapter.GetSupportedRoleIds())
-                {
-                    if (!map.TryAdd(roleId, adapter))
-                        throw new ArgumentException($"Duplicate runtime adapter '{roleId}'.", nameof(adapters));
-                }
-                continue;
-            }
-
             if (string.IsNullOrWhiteSpace(adapter.RoleId))
                 throw new ArgumentException("Every runtime adapter must declare a non-empty RoleId.", nameof(adapters));
             if (!map.TryAdd(adapter.RoleId, adapter))

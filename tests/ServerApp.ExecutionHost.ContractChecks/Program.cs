@@ -290,7 +290,7 @@ internal static class Program
             new TestRoleCompositionCatalog(definition));
         var component = new RecordingHostedComponent(signalReady: true);
         var factory = new RecordingHostedComponentFactory("contract.hosted", component);
-        var adapter = new InProcessServerRoleRuntimeAdapter(new[] { factory }, TimeSpan.FromSeconds(1));
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(1));
         await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
         var manifest = CreateManifest("instance-hosted", "contract.hosted");
 
@@ -319,7 +319,7 @@ internal static class Program
             new TestRoleCompositionCatalog(definition));
         var component = new RecordingHostedComponent(signalReady: false);
         var factory = new RecordingHostedComponentFactory("contract.hosted-timeout", component);
-        var adapter = new InProcessServerRoleRuntimeAdapter(new[] { factory }, TimeSpan.FromMilliseconds(20));
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromMilliseconds(20));
         await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
         var manifest = CreateManifest("instance-hosted-timeout", "contract.hosted-timeout");
 
