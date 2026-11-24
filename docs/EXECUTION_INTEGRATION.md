@@ -172,7 +172,7 @@ The lifecycle controller serializes transitions and avoids repeating a confirmed
 
 The contract checks use a deterministic adapter that reports readiness, drain, and stop. They verify that a transient stop failure keeps the reservation and RuntimeAssembly alive, a retry succeeds without a second drain, and a replacement request is admitted only after confirmed stop. A real supervised role component/process with bounded readiness, drain, and termination evidence remains tracked by [issue #7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7).
 
-## 7. Progress gate
+## 9. Progress gate
 
 - [x] Execution selected as the mandatory workflow execution substrate.
 - [x] Actual Execution and FSM_COS source boundaries inspected.
@@ -187,8 +187,9 @@ The contract checks use a deterministic adapter that reports readiness, drain, a
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
 - [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Execution/FSM_COS host contract-check executable passed.
-- [ ] Replace the in-memory MicroBundle catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
-- [ ] Replace the in-memory catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
+- [ ] Replace the in-memory MicroBundle catalog with candidate-scoped, immutable, content-hash-verified repository artifacts.
+- [x] Add host-owned role drain/stop lifecycle with reservation retention until confirmed stop; CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed.
+- [ ] Implement a real supervised role component/process with explicit readiness, bounded drain, termination evidence, and retry-safe cleanup.
 
 ---
 
