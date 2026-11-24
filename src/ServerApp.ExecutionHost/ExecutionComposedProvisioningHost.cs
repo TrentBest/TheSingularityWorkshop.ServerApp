@@ -138,7 +138,10 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                         TryGetOperation(runId, out var state) && state.Result is null)
                         state.Result = Cancelled(state.Manifest, "Execution cancelled the provisioning workflow.");
 
-                    ReleasePendingInstance(runId);
+                    // A successfully activated role still owns this InstanceId. Keep the
+                    // reservation until a host lifecycle/stop path explicitly releases it.
+                    if (snapshot.Status != WorkflowRunStatus.Succeeded)
+                        ReleasePendingInstance(runId);
                 }
             }
             catch (KeyNotFoundException)
