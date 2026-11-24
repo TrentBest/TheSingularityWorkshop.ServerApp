@@ -16,6 +16,7 @@ internal static class Program
         await ComposedRoleUsesExecutionAndFsmCos();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
+        await DuplicateActiveComposedInstanceIsRejected();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
@@ -173,6 +174,40 @@ internal static class Program
             "a composed but unready role must not be reported Ready");
         Assert(host.GetRuntimeAssembly(submission.RunId) is null,
             "a failed activation must not remain advertised as the active runtime assembly");
+    }
+
+    private static async Task DuplicateActiveComposedInstanceIsRejected()
+    {
+        var bundle = new TestBundle(300, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.active-unique",
+            new[] { new MicroBundleManifestEntry(300, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var adapter = new RecordingRuntimeAdapter("contract.active-unique", isReady: true);
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-active-duplicate", "contract.active-unique");
+
+        var first = host.Submit(manifest);
+        var result = await host.StartAsync(first.RunId);
+        Assert(result.Status == WorkflowStatus.Succeeded,
+            "the first composed role should become active before duplicate admission is checked");
+        Assert(host.GetProvisioningResult(first.RunId)?.IsReady == true,
+            "the first instance should remain Ready");
+
+        var rejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected,
+            "an active composed role must retain its InstanceId reservation until its host lifecycle confirms stop");
     }
 
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
