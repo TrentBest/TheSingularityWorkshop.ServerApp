@@ -282,9 +282,6 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by the host registry.");
 
             var adapter = _adapters[state.Manifest.RoleId];
-            if (adapter is IServerRoleLifecycleAdapter lifecycleAdapter)
-                state.Lifecycle = new ServerRoleLifecycleController(
-                    state.Manifest, assembly, lifecycleAdapter, _composer);
             Observe(context, state, "role-adapter", "invocation-started", assembly.RuntimeId, detail: state.Manifest.RoleId);
             RoleStartResult start;
             try

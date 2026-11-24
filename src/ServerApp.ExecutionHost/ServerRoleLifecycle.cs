@@ -44,7 +44,7 @@ public sealed class ServerRoleLifecycleController
     private readonly IServerRoleLifecycleAdapter _adapter;
     private readonly ServerRoleRuntimeComposer _composer;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private ServerRoleLifecycleState _state = ServerRoleLifecycleState.Running;
+    private volatile ServerRoleLifecycleState _state = ServerRoleLifecycleState.Running;
     private bool _roleStopConfirmed;
 
     public ServerRoleLifecycleController(
