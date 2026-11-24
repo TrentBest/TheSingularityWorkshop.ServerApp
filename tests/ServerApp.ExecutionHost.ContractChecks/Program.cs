@@ -20,6 +20,7 @@ internal static class Program
         await ActiveInstanceReservationIsReleasedOnlyAfterConfirmedStop();
         await InProcessHostedComponentRequiresExplicitReadinessAndStopsCleanly();
         await InProcessHostedComponentReadinessTimeoutCleansUp();
+        await InProcessHostedComponentDrainAndStopTimeoutsRemainRetryable();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
@@ -337,6 +338,80 @@ internal static class Program
         Assert(host.Cancel(replacement.RunId), "the replacement acceptance should be cancellable");
     }
 
+
+    private static async Task InProcessHostedComponentDrainAndStopTimeoutsRemainRetryable()
+    {
+        var bundle = new TestBundle(403, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-timeouts",
+            new[] { new MicroBundleManifestEntry(403, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: true) { BlockDrain = true };
+        var factory = new RecordingHostedComponentFactory("contract.hosted-timeouts", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(
+            factory,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMilliseconds(20),
+            TimeSpan.FromMilliseconds(20));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-timeouts", "contract.hosted-timeouts");
+
+        var submission = host.Submit(manifest);
+        var started = await host.StartAsync(submission.RunId);
+        Assert(started.Status == WorkflowStatus.Succeeded, "the timeout fixture should first become Ready");
+
+        var drainTimedOut = false;
+        try
+        {
+            await host.DrainRoleAsync(submission.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            drainTimedOut = true;
+        }
+        Assert(drainTimedOut, "a drain exceeding its configured deadline must fail explicitly");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Running,
+            "a timed-out drain must return to Running so it can be retried");
+        Assert(host.GetRuntimeAssembly(submission.RunId) is not null,
+            "a timed-out drain must retain the runtime and reservation");
+
+        component.BlockDrain = false;
+        await host.DrainRoleAsync(submission.RunId);
+        component.BlockStop = true;
+        var stopTimedOut = false;
+        try
+        {
+            await host.StopRoleAsync(submission.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            stopTimedOut = true;
+        }
+        Assert(stopTimedOut, "a stop exceeding its configured deadline must fail explicitly");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "a timed-out stop must remain retryable from Drained");
+
+        var duplicateRejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            duplicateRejected = true;
+        }
+        Assert(duplicateRejected, "the instance reservation must remain held after a stop timeout");
+
+        component.BlockStop = false;
+        await host.StopRoleAsync(submission.RunId);
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "the timed-out stop should complete on retry");
+        Assert(component.StopCount == 2 && component.DisposeCount == 1,
+            "the stop retry should terminate and dispose the component exactly once after success");
+    }
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -482,6 +557,8 @@ internal static class Program
         public int DrainCount { get; private set; }
         public int StopCount { get; private set; }
         public int DisposeCount { get; private set; }
+        public bool BlockDrain { get; set; }
+        public bool BlockStop { get; set; }
 
         public ValueTask StartAsync(ServerRoleHostedComponentContext context, CancellationToken cancellationToken)
         {
@@ -498,18 +575,18 @@ internal static class Program
             await _ready.Task.WaitAsync(cancellationToken);
         }
 
-        public ValueTask DrainAsync(CancellationToken cancellationToken)
+        public async ValueTask DrainAsync(CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             DrainCount++;
-            return ValueTask.CompletedTask;
+            if (BlockDrain)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
 
-        public ValueTask StopAsync(CancellationToken cancellationToken)
+        public async ValueTask StopAsync(CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             StopCount++;
-            return ValueTask.CompletedTask;
+            if (BlockStop)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         }
 
         public ValueTask DisposeAsync()

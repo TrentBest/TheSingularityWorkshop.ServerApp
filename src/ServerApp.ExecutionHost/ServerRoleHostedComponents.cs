@@ -38,17 +38,21 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
     private readonly IServerRoleHostedComponentFactory _factory;
     private readonly ConcurrentDictionary<string, ActiveComponent> _active = new(StringComparer.Ordinal);
     private readonly TimeSpan _readinessTimeout;
+    private readonly TimeSpan _drainTimeout;
+    private readonly TimeSpan _stopTimeout;
 
     public InProcessServerRoleRuntimeAdapter(
         IServerRoleHostedComponentFactory factory,
-        TimeSpan readinessTimeout)
+        TimeSpan readinessTimeout,
+        TimeSpan? drainTimeout = null,
+        TimeSpan? stopTimeout = null)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         if (string.IsNullOrWhiteSpace(factory.RoleId))
             throw new ArgumentException("The hosted component factory must declare a non-empty RoleId.", nameof(factory));
-        if (readinessTimeout <= TimeSpan.Zero || readinessTimeout == Timeout.InfiniteTimeSpan)
-            throw new ArgumentOutOfRangeException(nameof(readinessTimeout));
-        _readinessTimeout = readinessTimeout;
+        _readinessTimeout = ValidateTimeout(readinessTimeout, nameof(readinessTimeout));
+        _drainTimeout = ValidateTimeout(drainTimeout ?? TimeSpan.FromSeconds(30), nameof(drainTimeout));
+        _stopTimeout = ValidateTimeout(stopTimeout ?? TimeSpan.FromSeconds(30), nameof(stopTimeout));
     }
 
     public string RoleId => _factory.RoleId;
@@ -121,11 +125,16 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
             if (active.StopConfirmed || active.Drained)
                 return new RoleLifecycleResult(true, "Hosted component is already drained or stopped.");
 
+            using var deadline = CreateDeadline(cancellationToken, _drainTimeout);
             try
             {
-                await active.Component.DrainAsync(cancellationToken).ConfigureAwait(false);
+                await active.Component.DrainAsync(deadline.Token).ConfigureAwait(false);
                 active.Drained = true;
                 return new RoleLifecycleResult(true, "Hosted component drained.");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return new RoleLifecycleResult(false, $"Hosted component drain timed out after {_drainTimeout}.");
             }
             catch (Exception exception)
             {
@@ -154,10 +163,15 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
             {
                 if (!active.Drained)
                 {
+                    using var drainDeadline = CreateDeadline(cancellationToken, _drainTimeout);
                     try
                     {
-                        await active.Component.DrainAsync(cancellationToken).ConfigureAwait(false);
+                        await active.Component.DrainAsync(drainDeadline.Token).ConfigureAwait(false);
                         active.Drained = true;
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        return new RoleLifecycleResult(false, $"Hosted component drain before stop timed out after {_drainTimeout}.");
                     }
                     catch (Exception exception)
                     {
@@ -166,10 +180,15 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
                     }
                 }
 
+                using var stopDeadline = CreateDeadline(cancellationToken, _stopTimeout);
                 try
                 {
-                    await active.Component.StopAsync(cancellationToken).ConfigureAwait(false);
+                    await active.Component.StopAsync(stopDeadline.Token).ConfigureAwait(false);
                     active.StopConfirmed = true;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    return new RoleLifecycleResult(false, $"Hosted component stop timed out after {_stopTimeout}.");
                 }
                 catch (Exception exception)
                 {
@@ -204,7 +223,8 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
         {
             if (!active.StopConfirmed)
             {
-                await active.Component.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                using var stopDeadline = CreateDeadline(CancellationToken.None, _stopTimeout);
+                await active.Component.StopAsync(stopDeadline.Token).ConfigureAwait(false);
                 active.StopConfirmed = true;
             }
 
@@ -224,8 +244,22 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
 
     private void RemoveActive(string instanceId, ActiveComponent active)
     {
-        if (_active.TryGetValue(instanceId, out var current) && ReferenceEquals(current, active))
-            _active.TryRemove(instanceId, out _);
+        ((ICollection<KeyValuePair<string, ActiveComponent>>)_active)
+            .Remove(new KeyValuePair<string, ActiveComponent>(instanceId, active));
+    }
+
+    private static TimeSpan ValidateTimeout(TimeSpan timeout, string parameterName)
+    {
+        if (timeout <= TimeSpan.Zero || timeout == Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(parameterName);
+        return timeout;
+    }
+
+    private static CancellationTokenSource CreateDeadline(CancellationToken cancellationToken, TimeSpan timeout)
+    {
+        var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        return deadline;
     }
 
     private sealed class ActiveComponent(IServerRoleHostedComponent component)
