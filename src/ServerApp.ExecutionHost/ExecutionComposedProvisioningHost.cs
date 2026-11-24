@@ -176,6 +176,35 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
     public RuntimeAssembly? GetRuntimeAssembly(Guid runId) =>
         TryGetOperation(runId, out var state) ? state.Assembly : null;
 
+    /// <summary>Returns the host-owned lifecycle controller for a successfully activated role.</summary>
+    public ServerRoleLifecycleController? GetLifecycleController(Guid runId) =>
+        TryGetOperation(runId, out var state) ? state.Lifecycle : null;
+
+    /// <summary>Stops new work for an active role and waits for its adapter to drain.</summary>
+    public ValueTask DrainRoleAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        var lifecycle = GetLifecycleController(runId)
+            ?? throw new InvalidOperationException("The run has no active role with lifecycle support.");
+        return lifecycle.DrainAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Stops an active role. The instance reservation and FSM_COS registry entry are retained
+    /// until the adapter explicitly confirms stop.
+    /// </summary>
+    public async ValueTask StopRoleAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        if (!TryGetOperation(runId, out var state) || state.Lifecycle is null)
+            throw new InvalidOperationException("The run has no active role with lifecycle support.");
+
+        await state.Lifecycle.StopAsync(cancellationToken).ConfigureAwait(false);
+        if (state.Lifecycle.State == ServerRoleLifecycleState.Stopped)
+        {
+            state.Assembly = null;
+            ReleasePendingInstance(runId);
+        }
+    }
+
     private ValueTask ValidateAsync(WorkflowExecutionContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -273,6 +302,9 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 ServerInstanceState.Ready,
                 start.Detail,
                 Array.Empty<ManifestValidationError>());
+            if (adapter is IServerRoleLifecycleAdapter lifecycleAdapter)
+                state.Lifecycle = new ServerRoleLifecycleController(
+                    state.Manifest, assembly, lifecycleAdapter, _composer);
         }
         catch (OperationCanceledException)
         {
@@ -346,7 +378,22 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         new(manifest.InstanceId, manifest.RoleId, ServerInstanceState.Cancelled,
             detail, Array.Empty<ManifestValidationError>());
 
-    public ValueTask DisposeAsync() => _workflows.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _workflows.DisposeAsync().ConfigureAwait(false);
+        foreach (var state in _operations.Values)
+        {
+            if (state.Lifecycle is null || state.Lifecycle.State == ServerRoleLifecycleState.Stopped)
+                continue;
+
+            await state.Lifecycle.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            if (state.Lifecycle.State == ServerRoleLifecycleState.Stopped)
+            {
+                state.Assembly = null;
+                ReleasePendingInstance(state.RunId);
+            }
+        }
+    }
 
     private sealed class OperationState(ServerRoleManifest manifest)
     {
@@ -354,6 +401,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         public Guid RunId { get; set; }
         public ServerRoleCompositionDefinition? Definition { get; set; }
         public RuntimeAssembly? Assembly { get; set; }
+        public ServerRoleLifecycleController? Lifecycle { get; set; }
         public ProvisioningResult? Result { get; set; }
         public long ObservationSequence;
     }

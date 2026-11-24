@@ -17,6 +17,7 @@ internal static class Program
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         await DuplicateActiveComposedInstanceIsRejected();
+        await ActiveInstanceReservationIsReleasedOnlyAfterConfirmedStop();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
@@ -210,6 +211,71 @@ internal static class Program
             "an active composed role must retain its InstanceId reservation until its host lifecycle confirms stop");
     }
 
+
+    private static async Task ActiveInstanceReservationIsReleasedOnlyAfterConfirmedStop()
+    {
+        var bundle = new TestBundle(301, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.lifecycle",
+            new[] { new MicroBundleManifestEntry(301, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var adapter = new RecordingLifecycleAdapter("contract.lifecycle") { StopFailuresRemaining = 1 };
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-lifecycle", "contract.lifecycle");
+
+        var first = host.Submit(manifest);
+        var started = await host.StartAsync(first.RunId);
+        Assert(started.Status == WorkflowStatus.Succeeded, "lifecycle role should become active");
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Running,
+            "a ready lifecycle-capable role should begin in Running state");
+
+        await host.DrainRoleAsync(first.RunId);
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "explicit drain should transition the role to Drained");
+
+        var firstStopFailed = false;
+        try
+        {
+            await host.StopRoleAsync(first.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            firstStopFailed = true;
+        }
+        Assert(firstStopFailed, "a negative stop acknowledgement must be surfaced as a failed stop");
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "a failed stop must remain retryable from Drained");
+        Assert(host.GetRuntimeAssembly(first.RunId) is not null,
+            "the runtime assembly must remain retained while role termination is unconfirmed");
+
+        var duplicateRejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            duplicateRejected = true;
+        }
+        Assert(duplicateRejected, "the instance reservation must remain held until stop is confirmed");
+
+        await host.StopRoleAsync(first.RunId);
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "a confirmed stop should transition the role to Stopped");
+        Assert(host.GetRuntimeAssembly(first.RunId) is null,
+            "the host should release its RuntimeAssembly reference after confirmed stop");
+        Assert(adapter.DrainCount == 1, "a previously drained role must not be drained again during stop retry");
+        Assert(adapter.StopCount == 2, "the failed stop should be retried exactly once");
+
+        var replacement = host.Submit(manifest);
+        Assert(replacement.Status == WorkflowRunStatus.Accepted,
+            "the same InstanceId may be provisioned again after confirmed stop");
+        Assert(host.Cancel(replacement.RunId),
+            "the replacement acceptance can be cancelled to release its pending reservation");
+    }
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -336,6 +402,48 @@ internal static class Program
 
         public void Load(IMicroBundleLoadContext context) => _loadOrder.Add(Id);
         public bool Arbitrate(IMicroBundleArbitrationContext context, int roundIndex) => false;
+    }
+
+    private sealed class RecordingLifecycleAdapter(string roleId) : IServerRoleLifecycleAdapter
+    {
+        public string RoleId { get; } = roleId;
+        public int DrainCount { get; private set; }
+        public int StopCount { get; private set; }
+        public int StopFailuresRemaining { get; set; }
+
+        public ValueTask<RoleStartResult> StartAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new RoleStartResult(true, "Lifecycle fixture reports ready."));
+        }
+
+        public ValueTask<RoleLifecycleResult> DrainAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DrainCount++;
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture drained."));
+        }
+
+        public ValueTask<RoleLifecycleResult> StopAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StopCount++;
+            if (StopFailuresRemaining > 0)
+            {
+                StopFailuresRemaining--;
+                return ValueTask.FromResult(new RoleLifecycleResult(false, "Transient fixture stop failure."));
+            }
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture stopped."));
+        }
     }
 
     private sealed class RecordingRuntimeAdapter(string roleId, bool isReady) : IServerRoleRuntimeAdapter
