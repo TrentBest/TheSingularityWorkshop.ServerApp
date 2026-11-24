@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TrentBest/TheSingularityWorkshop.FSM_Execution
-          ref: e52f41c9f974518e444d1efd4b90f7eae3cf3811
+          ref: d36f9277c424972d4a57c2097704f20c36480d40
           path: _deps/FSM_Execution
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
