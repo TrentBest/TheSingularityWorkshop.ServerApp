@@ -132,7 +132,11 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
                 active.Drained = true;
                 return new RoleLifecycleResult(true, "Hosted component drained.");
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
             {
                 return new RoleLifecycleResult(false, $"Hosted component drain timed out after {_drainTimeout}.");
             }
@@ -169,7 +173,11 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
                         await active.Component.DrainAsync(drainDeadline.Token).ConfigureAwait(false);
                         active.Drained = true;
                     }
-                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
                     {
                         return new RoleLifecycleResult(false, $"Hosted component drain before stop timed out after {_drainTimeout}.");
                     }
@@ -186,7 +194,11 @@ public sealed class InProcessServerRoleRuntimeAdapter : IServerRoleLifecycleAdap
                     await active.Component.StopAsync(stopDeadline.Token).ConfigureAwait(false);
                     active.StopConfirmed = true;
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
                 {
                     return new RoleLifecycleResult(false, $"Hosted component stop timed out after {_stopTimeout}.");
                 }

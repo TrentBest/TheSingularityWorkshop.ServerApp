@@ -21,6 +21,8 @@ internal static class Program
         await InProcessHostedComponentRequiresExplicitReadinessAndStopsCleanly();
         await InProcessHostedComponentReadinessTimeoutCleansUp();
         await InProcessHostedComponentDrainAndStopTimeoutsRemainRetryable();
+        await InProcessHostedComponentStartFailureCleansUp();
+        await InProcessHostedComponentCancellationCleansUp();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
@@ -412,6 +414,63 @@ internal static class Program
             "the stop retry should terminate and dispose the component exactly once after success");
     }
 
+
+    private static async Task InProcessHostedComponentStartFailureCleansUp()
+    {
+        var bundle = new TestBundle(404, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-start-failure",
+            new[] { new MicroBundleManifestEntry(404, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: true) { FailStart = true };
+        var factory = new RecordingHostedComponentFactory("contract.hosted-start-failure", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(1));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-start-failure", "contract.hosted-start-failure");
+
+        var submission = host.Submit(manifest);
+        var result = await host.StartAsync(submission.RunId);
+        Assert(result.Status == WorkflowStatus.Failed, "a component start exception must fail provisioning");
+        Assert(component.StopCount == 1 && component.DisposeCount == 1,
+            "a component start exception must trigger stop and disposal cleanup");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "successful startup-failure cleanup must close the lifecycle");
+    }
+
+    private static async Task InProcessHostedComponentCancellationCleansUp()
+    {
+        var bundle = new TestBundle(405, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-cancel",
+            new[] { new MicroBundleManifestEntry(405, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: false);
+        var factory = new RecordingHostedComponentFactory("contract.hosted-cancel", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(5));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-cancel", "contract.hosted-cancel");
+
+        var submission = host.Submit(manifest);
+        var startTask = host.StartAsync(submission.RunId);
+        await component.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert(host.Cancel(submission.RunId), "Execution should accept cancellation while readiness is pending");
+        var result = await startTask;
+        Assert(result.Status == WorkflowStatus.Cancelled,
+            "cancellation during readiness must remain a cancelled workflow outcome");
+        Assert(component.StopCount == 1 && component.DisposeCount == 1,
+            "cancellation during readiness must stop and dispose the component");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "cancellation cleanup must confirm the hosted component lifecycle is stopped");
+        var replacement = host.Submit(manifest);
+        Assert(replacement.Status == WorkflowRunStatus.Accepted,
+            "the instance reservation should be released after cancellation cleanup is confirmed");
+        Assert(host.Cancel(replacement.RunId), "the replacement acceptance should be cancellable");
+    }
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -559,11 +618,17 @@ internal static class Program
         public int DisposeCount { get; private set; }
         public bool BlockDrain { get; set; }
         public bool BlockStop { get; set; }
+        public bool FailStart { get; set; }
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ValueTask StartAsync(ServerRoleHostedComponentContext context, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             StartCount++;
+            Started.TrySetResult();
+            if (FailStart)
+                throw new InvalidOperationException("Injected component start failure.");
             if (signalReady)
                 _ready.TrySetResult();
             return ValueTask.CompletedTask;
