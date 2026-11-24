@@ -20,3 +20,7 @@ The model cannot approve its own proposal. A decision is not itself a repository
 ## Current boundary
 
 This is the host composition adapter and durable queue/API integration. ServerApp's current CLI is not yet an ASP.NET web host, so these routes are not publicly listening endpoints until a web host maps them and provides the required authorizer. The GUI Pages site is not yet connected to a running API. No deployment or production authentication configuration is claimed.
+
+## ADP turn composition
+
+`ServerAppAutonomousDevelopmentHost` composes the persistent Execution task coordinator, one configured HeadlessAi turn coordinator, the host-owned operation policy/executor, and this approval queue. Its `AgentTurns` entry point performs one bounded model turn and then routes the structured operation proposals through the closed Execution action vocabulary, capability checks, or the pending human queue. The host still supplies the verified CI evidence references and canonical response schema when invoking a turn. A live CI artifact-ready trigger and production provider/authentication configuration remain separate host-wiring steps.
