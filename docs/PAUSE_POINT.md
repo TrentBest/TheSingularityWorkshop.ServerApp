@@ -6,8 +6,8 @@
 ## Current checkpoint — 2026-11-24
 
 - ServerApp PR [#23](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/23) now covers duplicate-active-instance protection, graceful role lifecycle, and the first in-process hosted-component adapter.
-- Latest source head: `f66a4e36cc19600f573f9e86e674c39b812be756`; 12 commits ahead of `development`, zero behind.
-- Lifecycle-only CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed. Expanded in-process adapter CI run [#403](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321493019) is running for the latest source at this checkpoint.
+- Latest source head: `a85622d8507a603e6bcacc37c10287f87def8b8f`; 13 commits ahead of `development`, zero behind. The latest commit is documentation-only.
+- Lifecycle-only CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed. Expanded in-process adapter CI run [#403](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321493019) passed all 20 workflow steps for code commit `f66a4e36cc19600f573f9e86e674c39b812be756`; the following `a85622d` commit only updates documentation.
 - The host lifecycle serializes Running → Draining → Drained → Stopping → Stopped, retains the RuntimeAssembly and InstanceId reservation after failed cleanup, and releases them only after confirmed stop.
 - Issue [#7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7) records the in-process first-boundary decision and adapter implementation: one host-allowlisted precompiled component factory per role, explicit readiness, and bounded readiness/drain/stop. It does not launch OS child processes or arbitrary downloaded code.
 - Remaining issue #7 work: provide a real ServerApp role component, prove component-owned listener/resource cleanup and diagnostics, then define durable restart/reconciliation. The current active-component registry is process-local.

@@ -195,7 +195,7 @@ The contract checks use a deterministic hosted component. They verify explicit r
 - [x] Core contract checks passed 23/23; the Execution/FSM_COS host contract-check executable passed.
 - [ ] Replace the in-memory MicroBundle catalog with candidate-scoped, immutable, content-hash-verified repository artifacts.
 - [x] Add host-owned role drain/stop lifecycle with reservation retention until confirmed stop; CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed.
-- [x] Implement the role-scoped, host-allowlisted in-process hosted-component adapter with explicit readiness and bounded drain/stop deadlines; CI run [#403](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321493019) is pending.
+- [x] Implement the role-scoped, host-allowlisted in-process hosted-component adapter with explicit readiness and bounded drain/stop deadlines; CI run [#403](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321493019) passed all 20 workflow steps.
 - [ ] Supply the first real ServerApp role component and prove its health/readiness, listener/resource ownership, drain, stop, and diagnostics.
 - [ ] Define durable restart/reconciliation and component-owned resource recovery; the current active-component registry is process-local.
 
