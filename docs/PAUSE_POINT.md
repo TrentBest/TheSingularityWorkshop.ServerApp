@@ -12,6 +12,13 @@
 - Issue [#7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7) records the in-process first-boundary decision and adapter implementation: one host-allowlisted precompiled component factory per role, explicit readiness, and bounded readiness/drain/stop. It does not launch OS child processes or arbitrary downloaded code.
 - Remaining issue #7 work: provide a real ServerApp role component, prove component-owned listener/resource cleanup and diagnostics, then define durable restart/reconciliation. The current active-component registry is process-local.
 - Sith policy run [#45321298131](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321298131) failed the existing branch-count policy on the immediately preceding code revision; no branches were deleted. Permanent target remains exactly `master` + `development`, and the old candidate-scoped PR #3 branch remains preserved pending selective reconciliation.
+- Branch inventory is currently 7 total: canonical `master` and `development`, plus five noncanonical branches. Sith policy run [#45321298131](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321298131) confirms the exact-two-branch gate is non-compliant.
+  - `fix/prevent-duplicate-active-role-instances` — PR #23, 14 ahead / 0 behind; active draft work, preserve.
+  - `chore/replace-foundry-with-execution-rebased` — PR #22, 13 ahead / 6 behind; open draft migration, preserve pending review.
+  - `work/candidate-scoped-composition-sessions` — PR #3, 66 ahead / 250 behind; stale but contains valuable verified artifact/session work to port selectively, preserve.
+  - `chore/retire-fsm-foundry-reference` — PR #19, 8 ahead / 39 behind; PR #19 explicitly says it is superseded by PR #22. This is the clearest retirement candidate after PR #19 is closed; not deleted.
+  - `chore/replace-foundry-with-execution` — no open PR, 24 ahead / 22 behind; overlaps the rebased PR #22 migration but still needs semantic reconciliation before it can be marked safe to delete.
+- No branch was deleted or force-updated.
 - PR #23 remains draft/open/unmerged. No merge, master promotion, NuGet publication, release, production deployment, or branch deletion was performed.
 
 ## Current checkpoint — 2026-11-21
