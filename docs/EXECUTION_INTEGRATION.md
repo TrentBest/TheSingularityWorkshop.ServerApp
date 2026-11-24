@@ -3,7 +3,7 @@
 
 # Execution Integration Boundary
 
-**Status: first Execution → FSM_COS → role-adapter vertical slice implemented in source; CI verification pending.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
+**Status: first Execution → FSM_COS → role-adapter vertical slice and host-owned role lifecycle contract implemented; CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
 
 ## 1. The three jobs are different
 
@@ -49,7 +49,7 @@ IServerRoleRuntimeAdapter.StartAsync(manifest, assembly)
 explicit role readiness -> ServerApp result
 ```
 
-The first composed workflow host now exists in `ExecutionComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, constructs a separate `RuntimeManifest`, calls `RuntimeExperienceHost.ComposeAndRegister`, and returns the composed assembly. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture adapter; a production runtime adapter remains future work.
+The first composed workflow host now exists in `ExecutionComposedProvisioningHost`. Its handlers are registered by the host, not selected by client data. `ServerRoleRuntimeComposer` maps a validated `RoleId` to a host-owned `ServerRoleCompositionDefinition`, constructs a separate `RuntimeManifest`, calls `RuntimeExperienceHost.ComposeAndRegister`, and returns the composed assembly. `IServerRoleRuntimeAdapter` receives that assembly and is the host-owned activation seam. Current tests use deterministic in-memory bundles and a fixture hosted component. The reusable InProcessServerRoleRuntimeAdapter is implemented; the first real ServerApp role component remains future work.
 
 - **ServerApp.Core** remains independent of Execution and FSM_COS. It owns operational manifests, dependency planning, capacity placement, and fleet lifecycle contracts.
 - **Execution** owns workflow acceptance, sequential execution through explicitly registered handlers, run snapshots, cancellation, and structured workflow outcomes.
@@ -146,9 +146,39 @@ Contract checks verify RunId correlation, monotonic sequence, exact loaded bundl
 
 ## 7. Non-goals of the first proof
 
-The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
+The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, a production role component, OS child-process supervision, durable restart/reconciliation, live health monitoring, arbitrary bundle unload, migration, or production deployment. The reusable hosted-component adapter is implemented, but its test component is deterministic and in-process. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
 
-## 7. Progress gate
+
+## 8. Active role lifetime and graceful stop
+
+Provisioning and role lifetime are separate state machines. Execution workflow success means the role adapter confirmed readiness; it does not mean the role has stopped. A successful role therefore retains its `InstanceId` reservation after the provisioning workflow completes.
+
+The host now recognizes an optional `IServerRoleLifecycleAdapter` capability for roles that support explicit drain and stop:
+
+The concrete first adapter is `InProcessServerRoleRuntimeAdapter`. It is constructed around one host-registered `IServerRoleHostedComponentFactory` for one exact `RoleId`; the client manifest cannot select a factory, type, assembly, path, or command. The component receives a host-created context containing the validated manifest and live `RuntimeAssembly`.
+
+Startup calls the component's `StartAsync`, then awaits its explicit `WaitForReadyAsync` signal before ServerApp can report Ready. Readiness has a required configured deadline. Drain and stop each have configurable deadlines (30 seconds by default); internal deadline expiry is reported as a retryable lifecycle failure, while caller cancellation remains cancellation. The adapter tracks component stop confirmation separately from disposal, so a disposal retry does not repeat an already confirmed component stop.
+
+This is an in-process hosted component boundary, not an OS child process. It intentionally avoids arbitrary process launch and premature IPC design while the host already owns a live RuntimeAssembly reference. A child-process adapter would be a separate implementation with an explicit IPC and exit-evidence contract.
+
+```text
+Running -> Draining -> Drained -> Stopping -> Stopped
+    ^          |                    |
+    +----------+                    +-- failed stop returns to Drained for retry
+```
+
+- `DrainRoleAsync(runId)` asks the adapter to stop accepting new work and wait for in-flight work.
+- `StopRoleAsync(runId)` drains first when necessary, then asks the adapter to confirm termination.
+- A failed drain returns to `Running`; a failed stop remains `Drained` and can be retried.
+- Once stop is confirmed, the host removes the FSM_COS runtime registry entry, clears its retained assembly reference, and releases the `InstanceId` reservation.
+- Host disposal attempts stop for active roles whose adapters implement the lifecycle contract.
+- Non-lifecycle adapters do not receive an invented stop capability; their successful reservations remain held until the host is disposed.
+
+The lifecycle controller serializes transitions and avoids repeating a confirmed stop during cleanup retries. Its cleanup is limited to FSM_COS host registry metadata. It does not unload arbitrary MicroBundle code, reverse bundle side effects, or prove that an external process exited.
+
+The contract checks use a deterministic hosted component. They verify explicit readiness, startup-failure cleanup, readiness timeout, cancellation during readiness, drain timeout/retry, stop timeout/retry, duplicate active admission, and reservation release only after confirmed stop. The first real role component, component-owned resource cleanup, and durable restart/reconciliation remain tracked by [issue #7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7).
+
+## 9. Progress gate
 
 - [x] Execution selected as the mandatory workflow execution substrate.
 - [x] Actual Execution and FSM_COS source boundaries inspected.
@@ -163,8 +193,11 @@ The current proof does not establish a distributed queue, durable cross-process 
 - [x] Contract fixtures prove dependency-first composition, assembly handoff, composition failure preventing activation, and readiness gating.
 - [x] CI run [#77](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/41332223051) passed for ServerApp commit `aa65513a04269149ca7cb91266352d98f49e527f` with all five exact source dependencies pinned.
 - [x] Core contract checks passed 23/23; the Execution/FSM_COS host contract-check executable passed.
-- [ ] Replace the in-memory MicroBundle catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
-- [ ] Replace the in-memory catalog and fixture role adapter with trusted repository-backed artifacts and a real server role host.
+- [ ] Replace the in-memory MicroBundle catalog with candidate-scoped, immutable, content-hash-verified repository artifacts.
+- [x] Add host-owned role drain/stop lifecycle with reservation retention until confirmed stop; CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed.
+- [x] Implement the role-scoped, host-allowlisted in-process hosted-component adapter with explicit readiness and bounded drain/stop deadlines; CI run [#403](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45321493019) passed all 20 workflow steps.
+- [ ] Supply the first real ServerApp role component and prove its health/readiness, listener/resource ownership, drain, stop, and diagnostics.
+- [ ] Define durable restart/reconciliation and component-owned resource recovery; the current active-component registry is process-local.
 
 ---
 

@@ -16,6 +16,13 @@ internal static class Program
         await ComposedRoleUsesExecutionAndFsmCos();
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
+        await DuplicateActiveComposedInstanceIsRejected();
+        await ActiveInstanceReservationIsReleasedOnlyAfterConfirmedStop();
+        await InProcessHostedComponentRequiresExplicitReadinessAndStopsCleanly();
+        await InProcessHostedComponentReadinessTimeoutCleansUp();
+        await InProcessHostedComponentDrainAndStopTimeoutsRemainRetryable();
+        await InProcessHostedComponentStartFailureCleansUp();
+        await InProcessHostedComponentCancellationCleansUp();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
     }
 
@@ -175,6 +182,295 @@ internal static class Program
             "a failed activation must not remain advertised as the active runtime assembly");
     }
 
+    private static async Task DuplicateActiveComposedInstanceIsRejected()
+    {
+        var bundle = new TestBundle(300, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.active-unique",
+            new[] { new MicroBundleManifestEntry(300, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var adapter = new RecordingRuntimeAdapter("contract.active-unique", isReady: true);
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-active-duplicate", "contract.active-unique");
+
+        var first = host.Submit(manifest);
+        var result = await host.StartAsync(first.RunId);
+        Assert(result.Status == WorkflowStatus.Succeeded,
+            "the first composed role should become active before duplicate admission is checked");
+        Assert(host.GetProvisioningResult(first.RunId)?.IsReady == true,
+            "the first instance should remain Ready");
+
+        var rejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected,
+            "an active composed role must retain its InstanceId reservation until its host lifecycle confirms stop");
+    }
+
+
+    private static async Task ActiveInstanceReservationIsReleasedOnlyAfterConfirmedStop()
+    {
+        var bundle = new TestBundle(301, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.lifecycle",
+            new[] { new MicroBundleManifestEntry(301, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var adapter = new RecordingLifecycleAdapter("contract.lifecycle") { StopFailuresRemaining = 1 };
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-lifecycle", "contract.lifecycle");
+
+        var first = host.Submit(manifest);
+        var started = await host.StartAsync(first.RunId);
+        Assert(started.Status == WorkflowStatus.Succeeded, "lifecycle role should become active");
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Running,
+            "a ready lifecycle-capable role should begin in Running state");
+
+        await host.DrainRoleAsync(first.RunId);
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "explicit drain should transition the role to Drained");
+
+        var firstStopFailed = false;
+        try
+        {
+            await host.StopRoleAsync(first.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            firstStopFailed = true;
+        }
+        Assert(firstStopFailed, "a negative stop acknowledgement must be surfaced as a failed stop");
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "a failed stop must remain retryable from Drained");
+        Assert(host.GetRuntimeAssembly(first.RunId) is not null,
+            "the runtime assembly must remain retained while role termination is unconfirmed");
+
+        var duplicateRejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            duplicateRejected = true;
+        }
+        Assert(duplicateRejected, "the instance reservation must remain held until stop is confirmed");
+
+        await host.StopRoleAsync(first.RunId);
+        Assert(host.GetLifecycleController(first.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "a confirmed stop should transition the role to Stopped");
+        Assert(host.GetRuntimeAssembly(first.RunId) is null,
+            "the host should release its RuntimeAssembly reference after confirmed stop");
+        Assert(adapter.DrainCount == 1, "a previously drained role must not be drained again during stop retry");
+        Assert(adapter.StopCount == 2, "the failed stop should be retried exactly once");
+
+        var replacement = host.Submit(manifest);
+        Assert(replacement.Status == WorkflowRunStatus.Accepted,
+            "the same InstanceId may be provisioned again after confirmed stop");
+        Assert(host.Cancel(replacement.RunId),
+            "the replacement acceptance can be cancelled to release its pending reservation");
+    }
+
+
+    private static async Task InProcessHostedComponentRequiresExplicitReadinessAndStopsCleanly()
+    {
+        var bundle = new TestBundle(401, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted",
+            new[] { new MicroBundleManifestEntry(401, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: true);
+        var factory = new RecordingHostedComponentFactory("contract.hosted", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(1));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted", "contract.hosted");
+
+        var submission = host.Submit(manifest);
+        var started = await host.StartAsync(submission.RunId);
+        Assert(started.Status == WorkflowStatus.Succeeded,
+            "the in-process component should become Ready only after its explicit readiness task completes");
+        Assert(component.StartCount == 1 && component.ReadinessWaitCount == 1,
+            "the adapter must start the component and await its readiness signal");
+        await host.DrainRoleAsync(submission.RunId);
+        await host.StopRoleAsync(submission.RunId);
+        Assert(component.DrainCount == 1 && component.StopCount == 1 && component.DisposeCount == 1,
+            "drain, stop, and disposal should each occur exactly once");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "the host lifecycle should finish only after the component stops");
+    }
+
+    private static async Task InProcessHostedComponentReadinessTimeoutCleansUp()
+    {
+        var bundle = new TestBundle(402, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-timeout",
+            new[] { new MicroBundleManifestEntry(402, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: false);
+        var factory = new RecordingHostedComponentFactory("contract.hosted-timeout", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromMilliseconds(20));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-timeout", "contract.hosted-timeout");
+
+        var submission = host.Submit(manifest);
+        var result = await host.StartAsync(submission.RunId);
+        Assert(result.Status == WorkflowStatus.Failed,
+            "a component that does not signal readiness before the configured deadline must fail activation");
+        Assert(component.StopCount == 1 && component.DisposeCount == 1,
+            "readiness timeout must stop and dispose the partially started component");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "successful timeout cleanup should leave no active lifecycle");
+        var replacement = host.Submit(manifest);
+        Assert(replacement.Status == WorkflowRunStatus.Accepted,
+            "the InstanceId reservation should be released after timeout cleanup is confirmed");
+        Assert(host.Cancel(replacement.RunId), "the replacement acceptance should be cancellable");
+    }
+
+
+    private static async Task InProcessHostedComponentDrainAndStopTimeoutsRemainRetryable()
+    {
+        var bundle = new TestBundle(403, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-timeouts",
+            new[] { new MicroBundleManifestEntry(403, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: true) { BlockDrain = true };
+        var factory = new RecordingHostedComponentFactory("contract.hosted-timeouts", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(
+            factory,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMilliseconds(20),
+            TimeSpan.FromMilliseconds(20));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-timeouts", "contract.hosted-timeouts");
+
+        var submission = host.Submit(manifest);
+        var started = await host.StartAsync(submission.RunId);
+        Assert(started.Status == WorkflowStatus.Succeeded, "the timeout fixture should first become Ready");
+
+        var drainTimedOut = false;
+        try
+        {
+            await host.DrainRoleAsync(submission.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            drainTimedOut = true;
+        }
+        Assert(drainTimedOut, "a drain exceeding its configured deadline must fail explicitly");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Running,
+            "a timed-out drain must return to Running so it can be retried");
+        Assert(host.GetRuntimeAssembly(submission.RunId) is not null,
+            "a timed-out drain must retain the runtime and reservation");
+
+        component.BlockDrain = false;
+        await host.DrainRoleAsync(submission.RunId);
+        component.BlockStop = true;
+        var stopTimedOut = false;
+        try
+        {
+            await host.StopRoleAsync(submission.RunId);
+        }
+        catch (InvalidOperationException)
+        {
+            stopTimedOut = true;
+        }
+        Assert(stopTimedOut, "a stop exceeding its configured deadline must fail explicitly");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Drained,
+            "a timed-out stop must remain retryable from Drained");
+
+        var duplicateRejected = false;
+        try
+        {
+            host.Submit(manifest);
+        }
+        catch (InvalidOperationException)
+        {
+            duplicateRejected = true;
+        }
+        Assert(duplicateRejected, "the instance reservation must remain held after a stop timeout");
+
+        component.BlockStop = false;
+        await host.StopRoleAsync(submission.RunId);
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "the timed-out stop should complete on retry");
+        Assert(component.StopCount == 2 && component.DisposeCount == 1,
+            "the stop retry should terminate and dispose the component exactly once after success");
+    }
+
+
+    private static async Task InProcessHostedComponentStartFailureCleansUp()
+    {
+        var bundle = new TestBundle(404, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-start-failure",
+            new[] { new MicroBundleManifestEntry(404, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: true) { FailStart = true };
+        var factory = new RecordingHostedComponentFactory("contract.hosted-start-failure", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(1));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-start-failure", "contract.hosted-start-failure");
+
+        var submission = host.Submit(manifest);
+        var result = await host.StartAsync(submission.RunId);
+        Assert(result.Status == WorkflowStatus.Failed, "a component start exception must fail provisioning");
+        Assert(component.StopCount == 1 && component.DisposeCount == 1,
+            "a component start exception must trigger stop and disposal cleanup");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "successful startup-failure cleanup must close the lifecycle");
+    }
+
+    private static async Task InProcessHostedComponentCancellationCleansUp()
+    {
+        var bundle = new TestBundle(405, "1.0.0", new List<ulong>());
+        var definition = new ServerRoleCompositionDefinition(
+            "contract.hosted-cancel",
+            new[] { new MicroBundleManifestEntry(405, "1.0.0") });
+        var composer = new ServerRoleRuntimeComposer(
+            new FsmCos(new TestBundleCatalog(bundle)),
+            new TestRoleCompositionCatalog(definition));
+        var component = new RecordingHostedComponent(signalReady: false);
+        var factory = new RecordingHostedComponentFactory("contract.hosted-cancel", component);
+        var adapter = new InProcessServerRoleRuntimeAdapter(factory, TimeSpan.FromSeconds(5));
+        await using var host = new ExecutionComposedProvisioningHost(composer, new[] { adapter });
+        var manifest = CreateManifest("instance-hosted-cancel", "contract.hosted-cancel");
+
+        var submission = host.Submit(manifest);
+        var startTask = host.StartAsync(submission.RunId);
+        await component.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert(host.Cancel(submission.RunId), "Execution should accept cancellation while readiness is pending");
+        var result = await startTask;
+        Assert(result.Status == WorkflowStatus.Cancelled,
+            "cancellation during readiness must remain a cancelled workflow outcome");
+        Assert(component.StopCount == 1 && component.DisposeCount == 1,
+            "cancellation during readiness must stop and dispose the component");
+        Assert(host.GetLifecycleController(submission.RunId)?.State == ServerRoleLifecycleState.Stopped,
+            "cancellation cleanup must confirm the hosted component lifecycle is stopped");
+        var replacement = host.Submit(manifest);
+        Assert(replacement.Status == WorkflowRunStatus.Accepted,
+            "the instance reservation should be released after cancellation cleanup is confirmed");
+        Assert(host.Cancel(replacement.RunId), "the replacement acceptance should be cancellable");
+    }
+
     private static ServerRoleManifest CreateManifest(string instanceId) => new()
     {
         SchemaVersion = 1,
@@ -301,6 +597,110 @@ internal static class Program
 
         public void Load(IMicroBundleLoadContext context) => _loadOrder.Add(Id);
         public bool Arbitrate(IMicroBundleArbitrationContext context, int roundIndex) => false;
+    }
+
+    private sealed class RecordingHostedComponentFactory(
+        string roleId,
+        RecordingHostedComponent component) : IServerRoleHostedComponentFactory
+    {
+        public string RoleId { get; } = roleId;
+        public IServerRoleHostedComponent Create(ServerRoleHostedComponentContext context) => component;
+    }
+
+    private sealed class RecordingHostedComponent(bool signalReady) : IServerRoleHostedComponent
+    {
+        private readonly TaskCompletionSource _ready =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int StartCount { get; private set; }
+        public int ReadinessWaitCount { get; private set; }
+        public int DrainCount { get; private set; }
+        public int StopCount { get; private set; }
+        public int DisposeCount { get; private set; }
+        public bool BlockDrain { get; set; }
+        public bool BlockStop { get; set; }
+        public bool FailStart { get; set; }
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask StartAsync(ServerRoleHostedComponentContext context, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StartCount++;
+            Started.TrySetResult();
+            if (FailStart)
+                throw new InvalidOperationException("Injected component start failure.");
+            if (signalReady)
+                _ready.TrySetResult();
+            return ValueTask.CompletedTask;
+        }
+
+        public async ValueTask WaitForReadyAsync(CancellationToken cancellationToken)
+        {
+            ReadinessWaitCount++;
+            await _ready.Task.WaitAsync(cancellationToken);
+        }
+
+        public async ValueTask DrainAsync(CancellationToken cancellationToken)
+        {
+            DrainCount++;
+            if (BlockDrain)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        public async ValueTask StopAsync(CancellationToken cancellationToken)
+        {
+            StopCount++;
+            if (BlockStop)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            DisposeCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingLifecycleAdapter(string roleId) : IServerRoleLifecycleAdapter
+    {
+        public string RoleId { get; } = roleId;
+        public int DrainCount { get; private set; }
+        public int StopCount { get; private set; }
+        public int StopFailuresRemaining { get; set; }
+
+        public ValueTask<RoleStartResult> StartAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new RoleStartResult(true, "Lifecycle fixture reports ready."));
+        }
+
+        public ValueTask<RoleLifecycleResult> DrainAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DrainCount++;
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture drained."));
+        }
+
+        public ValueTask<RoleLifecycleResult> StopAsync(
+            ServerRoleManifest manifest,
+            RuntimeAssembly assembly,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            StopCount++;
+            if (StopFailuresRemaining > 0)
+            {
+                StopFailuresRemaining--;
+                return ValueTask.FromResult(new RoleLifecycleResult(false, "Transient fixture stop failure."));
+            }
+            return ValueTask.FromResult(new RoleLifecycleResult(true, "Lifecycle fixture stopped."));
+        }
     }
 
     private sealed class RecordingRuntimeAdapter(string roleId, bool isReady) : IServerRoleRuntimeAdapter
