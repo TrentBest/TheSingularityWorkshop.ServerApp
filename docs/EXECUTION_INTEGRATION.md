@@ -3,7 +3,7 @@
 
 # Execution Integration Boundary
 
-**Status: first Execution → FSM_COS → role-adapter vertical slice implemented in source; CI verification pending.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
+**Status: first Execution → FSM_COS → role-adapter vertical slice and host-owned role lifecycle contract implemented; CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed.** ServerApp submits a three-step provisioning workflow to Execution's actual `WorkflowExecutionCoordinator`. The workflow validates an allowlisted role definition, composes its approved MicroBundle roots through FSM_COS, and passes the returned `RuntimeAssembly` to a host-owned role adapter. Contract fixtures prove dependency-first composition and readiness gating. This is not yet a production server process, repository-backed artifact delivery path, or distributed host.
 
 ## 1. The three jobs are different
 
@@ -146,7 +146,31 @@ Contract checks verify RunId correlation, monotonic sequence, exact loaded bundl
 
 ## 7. Non-goals of the first proof
 
-The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, live health monitoring, role stop/unload, migration, or production deployment. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
+The current proof does not establish a distributed queue, durable cross-process workflow store, remote command execution, production server listener, repository-backed artifact acquisition, content-hash verification, arbitrary assembly loading, hardware reservation, GPU-aware placement, multi-host scheduling, a real supervised process adapter, live health monitoring, arbitrary bundle unload, migration, or production deployment. The host lifecycle contract is implemented, but its current test adapter is deterministic and in-process. FSM_COS's current catalog is an in-process resolution contract; it does not download or verify artifact bytes. A future repository adapter must preserve BundleId + Version + ContentHash and prove retrieval, verification, and materialization separately before composition.
+
+
+## 8. Active role lifetime and graceful stop
+
+Provisioning and role lifetime are separate state machines. Execution workflow success means the role adapter confirmed readiness; it does not mean the role has stopped. A successful role therefore retains its `InstanceId` reservation after the provisioning workflow completes.
+
+The host now recognizes an optional `IServerRoleLifecycleAdapter` capability for roles that support explicit drain and stop:
+
+```text
+Running -> Draining -> Drained -> Stopping -> Stopped
+    ^          |                    |
+    +----------+                    +-- failed stop returns to Drained for retry
+```
+
+- `DrainRoleAsync(runId)` asks the adapter to stop accepting new work and wait for in-flight work.
+- `StopRoleAsync(runId)` drains first when necessary, then asks the adapter to confirm termination.
+- A failed drain returns to `Running`; a failed stop remains `Drained` and can be retried.
+- Once stop is confirmed, the host removes the FSM_COS runtime registry entry, clears its retained assembly reference, and releases the `InstanceId` reservation.
+- Host disposal attempts stop for active roles whose adapters implement the lifecycle contract.
+- Non-lifecycle adapters do not receive an invented stop capability; their successful reservations remain held until the host is disposed.
+
+The lifecycle controller serializes transitions and avoids repeating a confirmed stop during cleanup retries. Its cleanup is limited to FSM_COS host registry metadata. It does not unload arbitrary MicroBundle code, reverse bundle side effects, or prove that an external process exited.
+
+The contract checks use a deterministic adapter that reports readiness, drain, and stop. They verify that a transient stop failure keeps the reservation and RuntimeAssembly alive, a retry succeeds without a second drain, and a replacement request is admitted only after confirmed stop. A real supervised role component/process with bounded readiness, drain, and termination evidence remains tracked by [issue #7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7).
 
 ## 7. Progress gate
 

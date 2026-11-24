@@ -3,6 +3,16 @@
 
 # ServerApp Pause Point
 
+## Current checkpoint — 2026-11-24
+
+- ServerApp PR [#23](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/pull/23) now covers the duplicate-active-instance fix and the host-owned graceful role lifecycle contract.
+- Latest source head: `de615b71e684d8efad8a1b709da9885c93a69f8b`; three commits ahead of `development`, zero behind.
+- ServerApp CI run [#394](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320385886) passed all 20 build/contract workflow steps, including Execution host integration and contract checks.
+- The new lifecycle contract serializes Running → Draining → Drained → Stopping → Stopped, retains the RuntimeAssembly and InstanceId reservation after failed stop, and releases them only after confirmed stop. Its current adapter is a deterministic in-process test fixture, not a real process supervisor.
+- Sith policy run [#322](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/actions/runs/45320380004) still fails because the repository has branch-count churn. No branches were deleted; permanent target remains exactly `master` + `development`, and the old candidate-scoped PR #3 branch remains preserved pending selective reconciliation.
+- Next: implement issue [#7](https://github.com/TrentBest/TheSingularityWorkshop.ServerApp/issues/7) as an allowlisted in-process hosted-component boundary first (not arbitrary shell/process launch), then continue candidate-scoped verified MicroBundle artifact retrieval from issue #2.
+- PR #23 remains draft/open/unmerged. No merge, master promotion, NuGet publication, release, production deployment, or branch deletion was performed.
+
 ## Current checkpoint — 2026-11-21
 
 - The owner explicitly authorized moving the theoretical financial market and autonomous-swarm demonstrations toward executable simulation.
