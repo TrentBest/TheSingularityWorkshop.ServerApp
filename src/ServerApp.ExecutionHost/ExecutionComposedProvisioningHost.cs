@@ -40,6 +40,16 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
         foreach (var adapter in adapters)
         {
             ArgumentNullException.ThrowIfNull(adapter);
+            if (adapter is InProcessServerRoleRuntimeAdapter inProcessAdapter)
+            {
+                foreach (var roleId in inProcessAdapter.GetSupportedRoleIds())
+                {
+                    if (!map.TryAdd(roleId, adapter))
+                        throw new ArgumentException($"Duplicate runtime adapter '{roleId}'.", nameof(adapters));
+                }
+                continue;
+            }
+
             if (string.IsNullOrWhiteSpace(adapter.RoleId))
                 throw new ArgumentException("Every runtime adapter must declare a non-empty RoleId.", nameof(adapters));
             if (!map.TryAdd(adapter.RoleId, adapter))
@@ -140,7 +150,7 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
 
                     // A successfully activated role still owns this InstanceId. Keep the
                     // reservation until a host lifecycle/stop path explicitly releases it.
-                    if (snapshot.Status != WorkflowRunStatus.Succeeded)
+                    if (snapshot.Status != WorkflowRunStatus.Succeeded && !HasPendingLifecycle(runId))
                         ReleasePendingInstance(runId);
                 }
             }
@@ -163,7 +173,8 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 if (state.Result is null)
                     state.Result = Cancelled(state.Manifest, "Execution cancelled the accepted provisioning workflow.");
             }
-            ReleasePendingInstance(runId);
+            if (!HasPendingLifecycle(runId))
+                ReleasePendingInstance(runId);
         }
         return cancelled;
     }
@@ -281,7 +292,10 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 throw new InvalidOperationException($"FSM_COS runtime {assembly.RuntimeId} could not be selected by the host registry.");
 
             var adapter = _adapters[state.Manifest.RoleId];
-            Observe(context, state, "role-adapter", "invocation-started", assembly.RuntimeId, detail: adapter.RoleId);
+            if (adapter is IServerRoleLifecycleAdapter lifecycleAdapter)
+                state.Lifecycle = new ServerRoleLifecycleController(
+                    state.Manifest, assembly, lifecycleAdapter, _composer);
+            Observe(context, state, "role-adapter", "invocation-started", assembly.RuntimeId, detail: state.Manifest.RoleId);
             RoleStartResult start;
             try
             {
@@ -306,18 +320,35 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
                 state.Lifecycle = new ServerRoleLifecycleController(
                     state.Manifest, assembly, lifecycleAdapter, _composer);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
         {
-            _composer.Forget(assembly.RuntimeId);
-            state.Assembly = null;
-            state.Result = Cancelled(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
+            try
+            {
+                await CleanupFailedActivationAsync(state, assembly).ConfigureAwait(false);
+                state.Result = Cancelled(state.Manifest, "Role activation was cancelled before readiness was confirmed.");
+            }
+            catch (Exception cleanupException)
+            {
+                state.Result = Failed(state.Manifest,
+                    $"Role activation was cancelled and cleanup remains pending: {cleanupException.GetType().Name}: {cleanupException.Message}");
+                throw new AggregateException("Role activation cancellation cleanup failed.", exception, cleanupException);
+            }
             throw;
         }
         catch (Exception exception)
         {
-            _composer.Forget(assembly.RuntimeId);
-            state.Assembly = null;
-            state.Result = Failed(state.Manifest, $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
+            try
+            {
+                await CleanupFailedActivationAsync(state, assembly).ConfigureAwait(false);
+                state.Result = Failed(state.Manifest,
+                    $"Role activation failed: {exception.GetType().Name}: {exception.Message}");
+            }
+            catch (Exception cleanupException)
+            {
+                state.Result = Failed(state.Manifest,
+                    $"Role activation failed and cleanup remains pending: {cleanupException.GetType().Name}: {cleanupException.Message}");
+                throw new AggregateException("Role activation and cleanup both failed.", exception, cleanupException);
+            }
             throw;
         }
     }
@@ -361,6 +392,27 @@ public sealed class ExecutionComposedProvisioningHost : IAsyncDisposable
 
         state = null!;
         return false;
+    }
+
+    private bool HasPendingLifecycle(Guid runId) =>
+        TryGetOperation(runId, out var state) &&
+        state.Lifecycle is not null &&
+        state.Lifecycle.State != ServerRoleLifecycleState.Stopped;
+
+    private async ValueTask CleanupFailedActivationAsync(OperationState state, RuntimeAssembly assembly)
+    {
+        if (state.Lifecycle is not null)
+        {
+            await state.Lifecycle.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            if (state.Lifecycle.State != ServerRoleLifecycleState.Stopped)
+                throw new InvalidOperationException("The role lifecycle adapter did not confirm stop after activation failure.");
+        }
+        else
+        {
+            _composer.Forget(assembly.RuntimeId);
+        }
+
+        state.Assembly = null;
     }
 
     private void ReleasePendingInstance(Guid runId)
