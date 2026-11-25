@@ -124,7 +124,7 @@ The diagnostic adapter and composed role adapters are in-process fixtures; the c
 
 - [Architecture](docs/ARCHITECTURE.md) — system boundaries, server roles, provisioning model, and proof sequence.
 - [Deterministic Simulation Message Fabric](docs/SIMULATION_MESSAGE_FABRIC.md) — the first in-process message transport contract, ordering, expiry, duplicate handling, evidence, and limits.
-- [Execution Integration Boundary](docs/FOUNDRY_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
+- [Execution Integration Boundary](docs/EXECUTION_INTEGRATION.md) — selected execution ownership, actual source contracts, and the first integration proof.
 - [Founding Fleet Notes](docs/SERVER_FLEET_MODEL.md) — captured product vision and role inventory.
 - [Server Role Manifest](docs/SERVER_ROLE_MANIFEST.md) — first manifest contract and local provisioning proof.
 - [Documentation Index](DOCUMENTATION_INDEX.md) — repository documentation map.
