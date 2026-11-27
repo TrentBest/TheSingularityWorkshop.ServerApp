@@ -10,7 +10,7 @@ public static class ServerAppCiAiEvidenceProfiles
 {
     public static CiWorkflowObserverProfile ExecutionDefault { get; } = new(
         workflowPath: ".github/workflows/execution-fsm-api-probe.yml",
-        requiredJobKey: "build-and-execute",
+        requiredJobKey: "fsm-api-proof",
         requiredJobName: "Build, execute, and capture state evidence",
         resolutionStepName: "Resolve candidate",
         verificationStepName: "Verify candidate checkout",
