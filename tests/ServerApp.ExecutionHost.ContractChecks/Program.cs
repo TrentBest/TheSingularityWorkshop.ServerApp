@@ -8,6 +8,7 @@ internal static class Program
 {
     private static async Task Main()
     {
+        ServerAppCiAiEvidenceLifecycleContractChecks.Run();
         ProviderEventShaIsDistinctFromWorkflowDefinitionSha();
         await SuccessfulRoleActivationIsAExecutionWorkflow();
         await FailedRoleActivationFailsTheExecutionWorkflow();
