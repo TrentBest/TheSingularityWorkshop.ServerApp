@@ -68,7 +68,7 @@ public sealed class ServerAppCiAiEvidenceHost
             providerRun.ProvenanceArtifact,
             mapping.Repository,
             runBinding.RunId,
-            mapping.TrustedWorkflowSha,
+            runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha,
             observedAt,
             cancellationToken).ConfigureAwait(false);
 
