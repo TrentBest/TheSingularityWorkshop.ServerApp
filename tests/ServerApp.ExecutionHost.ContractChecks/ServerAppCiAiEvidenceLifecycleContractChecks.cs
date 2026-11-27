@@ -210,7 +210,8 @@ internal static class ServerAppCiAiEvidenceLifecycleContractChecks
             candidateCheckoutEvidence: checkout);
         return CiWorkflowEvidencePacket.FromValidatedProvenance(
             observed, provenance, workflowDefinitionTrusted: workflowTrusted,
-            new[] { new CiWorkflowRequiredCheckBinding(JobKey, JobName) });
+            requiredChecks: new[] { new CiWorkflowRequiredCheckBinding(JobKey, JobName) },
+            candidateCheckoutEvidence: checkout);
     }
 
     private static TaskFixture CreateTaskFixture(string taskId)
