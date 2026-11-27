@@ -2,9 +2,7 @@ name: ServerApp CI
 
 on:
   push:
-    branches: [development, master]
-  pull_request:
-    branches: [development, master]
+    branches: [development, master, feature/**, work/**, integration/**]
 
 permissions:
   contents: read
@@ -19,8 +17,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TrentBest/TheSingularityWorkshop.FSM_Execution
-          ref: d36f9277c424972d4a57c2097704f20c36480d40
+          ref: c4c6af46bee43175ec123ba2ea3801091e870c71
           path: _deps/FSM_Execution
+      - name: Checkout CiAi source and its source dependencies (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: TrentBest/TheSingularityWorkshop.CiAi
+          ref: 93692958305391b5fe31ba27031dcc91eda934d2
+          path: _deps/FSM_Execution/dependencies/CiAi
+          submodules: recursive
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
         with:
