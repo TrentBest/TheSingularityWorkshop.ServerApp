@@ -21,3 +21,22 @@ public static class ServerAppCiAiEvidenceProfiles
         testProviderLabel: "dotnet-vstest",
         requiredCheckDisplayName: "Execution FSM_API and Fox/Sheepdog Proof");
 }
+
+
+/// <summary>
+/// Resolves the provider's event/head SHA from the persisted exact-run binding.
+/// This is deliberately distinct from the trusted workflow-definition SHA.
+/// </summary>
+public static class ServerAppCiAiEvidenceIdentity
+{
+    public static string ResolveProviderEventSha(
+        CiAiRequestTaskMapping mapping,
+        CiAiDispatchRunBinding runBinding)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        ArgumentNullException.ThrowIfNull(runBinding);
+        mapping.Validate();
+        runBinding.ValidateAgainst(mapping);
+        return runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
+    }
+}
