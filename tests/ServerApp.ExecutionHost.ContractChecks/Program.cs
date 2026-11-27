@@ -46,6 +46,11 @@ internal static class Program
         var resolved = ServerAppCiAiEvidenceIdentity.ResolveProviderEventSha(mapping, binding);
         Assert(resolved == eventSha && resolved != workflowSha,
             "provider artifact lookup must use the exact event/head SHA, not the trusted workflow-definition SHA");
+        var deliveryIdentity = ServerAppCiAiEvidenceIdentity.CreateDeliveryIdentity(mapping);
+        Assert(deliveryIdentity.RequestId == mapping.RequestId &&
+            deliveryIdentity.OperationId == mapping.OperationId &&
+            deliveryIdentity.IdempotencyKey == mapping.IdempotencyKey,
+            "CiAi evidence delivery did not preserve the exact pre-dispatch mapping identity");
     }
 
     private static async Task SuccessfulRoleActivationIsAExecutionWorkflow()
