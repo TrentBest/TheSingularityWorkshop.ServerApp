@@ -18,7 +18,9 @@ public static class ServerAppCiAiEvidenceProfiles
         trxEntryName: "results.trx",
         testProviderLabel: "dotnet-vstest",
         requiredJobKey: "fsm-api-proof",
-        requiredJobName: "Build, execute, and capture state evidence");
+        requiredJobName: "Build, execute, and capture state evidence",
+        resolutionStepName: "Resolve candidate",
+        verificationStepName: "Verify candidate checkout");
 }
 
 
