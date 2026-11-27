@@ -121,8 +121,12 @@ internal static class ServerAppCiAiEvidenceLifecycleContractChecks
         }
     }
 
-    private static ExecutionAcceptedCiAiWorkflowEvidence Accept(CiWorkflowEvidencePacket packet) =>
-        new(packet, packet.PayloadSha256);
+    private static ExecutionAcceptedCiAiWorkflowEvidence Accept(CiWorkflowEvidencePacket packet)
+    {
+        var exactBytes = Encoding.UTF8.GetBytes(packet.ToJson());
+        var digest = Convert.ToHexString(SHA256.HashData(exactBytes)).ToLowerInvariant();
+        return new ExecutionAcceptedCiAiWorkflowEvidence(packet, digest);
+    }
 
     private static CiAiRequestTaskMappingSnapshot CreateRequest(
         string taskId,
