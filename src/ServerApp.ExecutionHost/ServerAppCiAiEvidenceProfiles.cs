@@ -45,11 +45,11 @@ public static class ServerAppCiAiEvidenceIdentity
     /// Projects the exact pre-dispatch identity into CiAi's transport-neutral delivery contract.
     /// Never generate a new request, operation, or idempotency identity at evidence-publication time.
     /// </summary>
-    public static CiWorkflowEvidenceDeliveryIdentity CreateDeliveryIdentity(CiAiRequestTaskMapping mapping)
+    public static CiAiArtifactDeliveryIdentity CreateDeliveryIdentity(CiAiRequestTaskMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
         mapping.Validate();
-        return new CiWorkflowEvidenceDeliveryIdentity(
+        return new CiAiArtifactDeliveryIdentity(
             mapping.RequestId, mapping.OperationId, mapping.IdempotencyKey).Validate();
     }
 }
