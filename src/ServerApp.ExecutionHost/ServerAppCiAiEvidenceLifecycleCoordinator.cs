@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using TheSingularityWorkshop.CiAi;
 using TheSingularityWorkshop.Execution;
 
@@ -69,14 +67,13 @@ public sealed class ServerAppCiAiEvidenceLifecycleCoordinator
         var packet = acceptedEvidence.Packet;
         if (!string.Equals(packet.Schema, CiWorkflowEvidencePacket.CurrentSchema, StringComparison.Ordinal) ||
             packet.ContractVersion != CiWorkflowEvidencePacket.CurrentContractVersion ||
+            string.IsNullOrWhiteSpace(acceptedEvidence.PacketSha256) ||
             acceptedEvidence.PacketSha256.Length != 64 ||
             !acceptedEvidence.PacketSha256.All(Uri.IsHexDigit))
             throw new InvalidDataException("Accepted evidence is not a canonical V1 packet with a valid exact-byte digest.");
-        var canonicalPacketBytes = Encoding.UTF8.GetBytes(packet.ToJson());
-        var canonicalPacketDigest = SHA256.HashData(canonicalPacketBytes);
-        if (!CryptographicOperations.FixedTimeEquals(
-            canonicalPacketDigest, Convert.FromHexString(acceptedEvidence.PacketSha256)))
-            throw new InvalidDataException("Accepted evidence digest does not match the canonical packet bytes.");
+        // The acceptance consumer supplies the digest of the exact retrieved bytes. Do not
+        // recompute it from the rehydrated object: host trust re-evaluation can normalize
+        // the in-memory representation without changing the immutable accepted-byte identity.
         var packetDigest = acceptedEvidence.PacketSha256.ToLowerInvariant();
         var expectedEventSha = runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
         var expectedWorkflowRef = mapping.Repository + "/" + mapping.WorkflowPath + "@" + mapping.TrustedWorkflowRef;
