@@ -9,8 +9,9 @@ namespace ServerApp.ExecutionHost;
 /// </summary>
 public sealed record ServerAppAcceptedCiAiEvidence(
     ExecutionAcceptedCiAiWorkflowEvidence WorkflowEvidence,
-    ReadOnlyMemory<byte> TestResultsArchiveBytes,
-    CiProviderArtifactObservation TestResultsArtifact,
+    CiTestResultArtifactArchive TestResultsArchive,
+    CiTestResultProviderArtifactBinding TestResultsSourceBinding,
+    CiTestResultReport TestResultReport,
     DateTimeOffset ObservedAt);
 
 /// <summary>
@@ -98,7 +99,47 @@ public sealed class ServerAppCiAiEvidenceHost
             _packetStore,
             observedAt);
 
+        var expectedTestArtifactName = _observerProfile.TestArtifactName(runBinding.RunId, runBinding.RunAttempt);
+        if (!string.Equals(mapping.SourceArtifactName, expectedTestArtifactName, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Persisted request mapping does not authorize the exact profile-bound test-results artifact name.");
+
+        var requiredJobPolicy = _observerProfile.CreateRequiredJobPolicy(runBinding.RunId, runBinding.RunAttempt);
+        var requiredJobs = accepted.Packet.ObservedRun.Jobs.Where(job =>
+            job.RunId == runBinding.RunId &&
+            job.RunAttempt == runBinding.RunAttempt &&
+            string.Equals(job.Name, mapping.JobName, StringComparison.Ordinal)).ToArray();
+        if (requiredJobs.Length != 1)
+            throw new InvalidDataException("The trusted run does not contain exactly one registered required job for test-result binding.");
+
+        var testResultsBinding = CiTestResultProviderArtifactBinding.FromObservedArtifact(
+            providerRun.TestResultsArtifact,
+            accepted.Packet,
+            requiredJobPolicy,
+            requiredJobs[0].JobId,
+            mapping.JobKey!);
+        var verifiedTestResultsArchive = CiTestResultArtifactArchive.Read(
+            testResultsArchive,
+            testResultsBinding,
+            _observerProfile.TrxEntryName,
+            _observerProfile.ProvenanceEntryName);
+        var testResultSource = CiTestResultArtifactSource.FromVerifiedProviderObservation(
+            accepted.Packet,
+            requiredJobPolicy,
+            testResultsBinding,
+            verifiedTestResultsArchive,
+            _observerProfile.TestProviderLabel);
+        var testResultReport = CiTestResultReport.ParseAndValidate(
+            verifiedTestResultsArchive.TrxBytes,
+            accepted.Packet,
+            testResultSource,
+            requiredJobPolicy,
+            observedAt);
+
         return new ServerAppAcceptedCiAiEvidence(
-            accepted, testResultsArchive, providerRun.TestResultsArtifact, observedAt);
+            accepted,
+            verifiedTestResultsArchive,
+            testResultsBinding,
+            testResultReport,
+            observedAt);
     }
 }
