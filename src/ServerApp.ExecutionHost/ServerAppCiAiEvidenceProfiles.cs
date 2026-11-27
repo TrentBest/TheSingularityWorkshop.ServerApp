@@ -38,4 +38,16 @@ public static class ServerAppCiAiEvidenceIdentity
         runBinding.ValidateAgainst(mapping);
         return runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
     }
+
+    /// <summary>
+    /// Projects the exact pre-dispatch identity into CiAi's transport-neutral delivery contract.
+    /// Never generate a new request, operation, or idempotency identity at evidence-publication time.
+    /// </summary>
+    public static CiWorkflowEvidenceDeliveryIdentity CreateDeliveryIdentity(CiAiRequestTaskMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        mapping.Validate();
+        return new CiWorkflowEvidenceDeliveryIdentity(
+            mapping.RequestId, mapping.OperationId, mapping.IdempotencyKey).Validate();
+    }
 }
