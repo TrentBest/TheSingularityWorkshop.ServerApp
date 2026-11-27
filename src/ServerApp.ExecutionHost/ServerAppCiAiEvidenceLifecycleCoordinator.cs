@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using TheSingularityWorkshop.CiAi;
 using TheSingularityWorkshop.Execution;
 
@@ -65,10 +67,20 @@ public sealed class ServerAppCiAiEvidenceLifecycleCoordinator
             throw new UnauthorizedAccessException("A current, unexpired task lease is required to apply CI evidence.");
 
         var packet = acceptedEvidence.Packet;
+        if (!string.Equals(packet.Schema, CiWorkflowEvidencePacket.CurrentSchema, StringComparison.Ordinal) ||
+            packet.ContractVersion != CiWorkflowEvidencePacket.CurrentContractVersion ||
+            acceptedEvidence.PacketSha256.Length != 64 ||
+            !acceptedEvidence.PacketSha256.All(Uri.IsHexDigit))
+            throw new InvalidDataException("Accepted evidence is not a canonical V1 packet with a valid exact-byte digest.");
+        var canonicalPacketBytes = Encoding.UTF8.GetBytes(packet.ToJson());
+        var canonicalPacketDigest = SHA256.HashData(canonicalPacketBytes);
+        if (!CryptographicOperations.FixedTimeEquals(
+            canonicalPacketDigest, Convert.FromHexString(acceptedEvidence.PacketSha256)))
+            throw new InvalidDataException("Accepted evidence digest does not match the canonical packet bytes.");
+        var packetDigest = acceptedEvidence.PacketSha256.ToLowerInvariant();
         var expectedEventSha = runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha;
         var expectedWorkflowRef = mapping.Repository + "/" + mapping.WorkflowPath + "@" + mapping.TrustedWorkflowRef;
-        if (!string.Equals(acceptedEvidence.PacketSha256, packet.PayloadSha256, StringComparison.Ordinal) ||
-            !string.Equals(packet.Provenance.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase) ||
+        if (!string.Equals(packet.Provenance.Repository, mapping.Repository, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(packet.Provenance.WorkflowPath, mapping.WorkflowPath, StringComparison.Ordinal) ||
             !string.Equals(packet.Provenance.WorkflowRef, expectedWorkflowRef, StringComparison.Ordinal) ||
             !string.Equals(packet.Provenance.WorkflowSha, mapping.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
@@ -122,7 +134,7 @@ public sealed class ServerAppCiAiEvidenceLifecycleCoordinator
             packet.CandidateSha,
             packet.ObservedRun.RunId,
             packet.ObservedRun.RunAttempt,
-            acceptedEvidence.PacketSha256,
+            packetDigest,
             packet.EvidenceComplete,
             packet.IsSuccessful,
             packet.HasActionableDiagnostics,
