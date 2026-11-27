@@ -60,7 +60,7 @@ public sealed class ServerAppCiAiEvidenceHost
         var mapping = request.Mapping.Validate();
         var runBinding = request.RunBinding
             ?? throw new InvalidOperationException("CiAi provider observation requires a persisted exact-run binding.");
-        runBinding.ValidateAgainst(mapping);
+        var expectedProviderEventSha = ServerAppCiAiEvidenceIdentity.ResolveProviderEventSha(mapping, runBinding);
 
         var providerRun = await _providerObserver.ObserveAsync(
             request, _observerProfile, observedAt, cancellationToken).ConfigureAwait(false);
@@ -69,7 +69,7 @@ public sealed class ServerAppCiAiEvidenceHost
             providerRun.ProvenanceArtifact,
             mapping.Repository,
             runBinding.RunId,
-            runBinding.EventSha ?? mapping.TrustedEventSha ?? mapping.TrustedWorkflowSha,
+            expectedProviderEventSha,
             observedAt,
             cancellationToken).ConfigureAwait(false);
 
@@ -77,7 +77,7 @@ public sealed class ServerAppCiAiEvidenceHost
             providerRun.TestResultsArtifact,
             mapping.Repository,
             runBinding.RunId,
-            mapping.TrustedWorkflowSha,
+            expectedProviderEventSha,
             observedAt,
             cancellationToken).ConfigureAwait(false);
 
