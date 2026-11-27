@@ -215,9 +215,24 @@ public sealed class ServerAppCiAiEvidenceHost
             !string.Equals(left.CandidateRef, right.CandidateRef, StringComparison.Ordinal) ||
             !string.Equals(left.CandidateSha, right.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(left.WorkflowPath, right.WorkflowPath, StringComparison.Ordinal) ||
+            !string.Equals(left.TrustedWorkflowRef, right.TrustedWorkflowRef, StringComparison.Ordinal) ||
             !string.Equals(left.TrustedWorkflowSha, right.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(left.TrustedEventSha, right.TrustedEventSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(left.ProviderIdentity, right.ProviderIdentity, StringComparison.Ordinal) ||
+            !string.Equals(left.JobKey, right.JobKey, StringComparison.Ordinal) ||
+            !string.Equals(left.JobName, right.JobName, StringComparison.Ordinal) ||
+            !string.Equals(left.SourceArtifactName, right.SourceArtifactName, StringComparison.Ordinal) ||
+            !string.Equals(left.ArtifactOrigin, right.ArtifactOrigin, StringComparison.Ordinal) ||
+            !string.Equals(left.AcknowledgementDestination, right.AcknowledgementDestination, StringComparison.Ordinal) ||
+            !string.Equals(left.AcknowledgementAuthProfileId, right.AcknowledgementAuthProfileId, StringComparison.Ordinal) ||
+            left.CreatedAt != right.CreatedAt || left.ExpiresAt != right.ExpiresAt ||
             leftRun.RunId != rightRun.RunId || leftRun.RunAttempt != rightRun.RunAttempt ||
-            !string.Equals(leftRun.EventSha, rightRun.EventSha, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(leftRun.Event, rightRun.Event, StringComparison.Ordinal) ||
+            !string.Equals(leftRun.EventSha, rightRun.EventSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(leftRun.WorkflowRef, rightRun.WorkflowRef, StringComparison.Ordinal) ||
+            !string.Equals(leftRun.WorkflowSha, rightRun.WorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(leftRun.CandidateRef, rightRun.CandidateRef, StringComparison.Ordinal) ||
+            !string.Equals(leftRun.CandidateSha, rightRun.CandidateSha, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("Authenticated artifact notice resolved a different persisted dispatch identity.");
     }
 }
