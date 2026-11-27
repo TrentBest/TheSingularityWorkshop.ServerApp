@@ -10,17 +10,15 @@ namespace ServerApp.ExecutionHost;
 public static class ServerAppCiAiEvidenceProfiles
 {
     public static CiWorkflowObserverProfile ExecutionDefault { get; } = new(
+        id: "execution-fsm-api-probe-v1",
         workflowPath: ".github/workflows/execution-fsm-api-probe.yml",
-        requiredJobKey: "fsm-api-proof",
-        requiredJobName: "Build, execute, and capture state evidence",
-        resolutionStepName: "Resolve candidate",
-        verificationStepName: "Verify candidate checkout",
-        provenanceArtifactPrefix: "ciai-workflow-provenance",
-        testArtifactPrefix: "ciai-test-results",
-        trxEntryName: "results.trx",
+        provenanceArtifactNameTemplate: "ciai-workflow-provenance-{attempt}",
+        testArtifactNameTemplate: "ciai-test-results-{attempt}",
         provenanceEntryName: "workflow-provenance.json",
+        trxEntryName: "results.trx",
         testProviderLabel: "dotnet-vstest",
-        requiredCheckDisplayName: "Execution FSM_API and Fox/Sheepdog Proof");
+        requiredJobKey: "fsm-api-proof",
+        requiredJobName: "Build, execute, and capture state evidence");
 }
 
 
