@@ -26,6 +26,9 @@ public sealed class ServerAppCiAiEvidenceLifecycleCoordinator
         _attemptJournal = attemptJournal ?? throw new ArgumentNullException(nameof(attemptJournal));
     }
 
+    internal bool IsBoundTo(PersistentWorkTaskCoordinator tasks) =>
+        ReferenceEquals(_tasks, tasks);
+
     /// <summary>
     /// Applies only the producer-owned, host-revalidated V1 packet. The exact packet digest,
     /// persisted dispatch mapping, current task lease, candidate, run attempt, and required-check
