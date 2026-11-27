@@ -139,7 +139,7 @@ public sealed class ServerAppCiAiEvidenceHost
         var accepted = ExecutionCiAiWorkflowEvidenceAcceptanceService.Accept(
             ingressResult,
             retrievedArtifact,
-            providerRun,
+            providerRun.Run,
             provenanceArchive,
             _observerProfile,
             CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityId,
