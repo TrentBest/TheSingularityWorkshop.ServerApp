@@ -4,10 +4,11 @@ using TheSingularityWorkshop.Execution;
 namespace ServerApp.ExecutionHost;
 
 /// <summary>
-/// One independently observed CI result. Workflow evidence is durably staged by Execution;
-/// the raw test-results archive remains available for CiAi's report builder and verdict consumer.
+/// One authenticated producer notice and independently accepted workflow packet, paired
+/// with the separately verified test-results archive used only for diagnostics.
 /// </summary>
 public sealed record ServerAppAcceptedCiAiEvidence(
+    CiAiRequestTaskMappingSnapshot Request,
     ExecutionAcceptedCiAiWorkflowEvidence WorkflowEvidence,
     CiTestResultArtifactArchive TestResultsArchive,
     CiTestResultProviderArtifactBinding TestResultsSourceBinding,
@@ -15,12 +16,18 @@ public sealed record ServerAppAcceptedCiAiEvidence(
     DateTimeOffset ObservedAt);
 
 /// <summary>
-/// ServerApp composition root for the read-only GitHub → CiAi evidence path. All network clients
-/// and credential providers are injected; the caller must supply pinned HTTPS clients and an
-/// explicit storage-origin allowlist when constructing the archive downloader.
+/// ServerApp composition root for the authenticated CiAi producer → Execution consumer path.
+/// Notice authentication, mapping lookup, exact artifact retrieval, independent provider
+/// observation, protected workflow trust, and durable V1 packet acceptance are separate gates.
+/// All network clients, authenticators, and credential providers are host supplied.
 /// </summary>
 public sealed class ServerAppCiAiEvidenceHost
 {
+    private readonly JsonlCiAiRequestTaskMappingJournal _mappingJournal;
+    private readonly JsonlCiAiArtifactNoticeReceiptLedger _noticeReceipts;
+    private readonly ICiAiArtifactTransport _artifactTransport;
+    private readonly string _receiverIdentity;
+    private readonly string _providerRepository;
     private readonly IExecutionCiAiProviderRunObserver _providerObserver;
     private readonly IGitHubActionsArtifactArchiveDownloader _artifactDownloader;
     private readonly IGitHubActionsWorkflowDefinitionReader _workflowReader;
@@ -28,12 +35,24 @@ public sealed class ServerAppCiAiEvidenceHost
     private readonly CiWorkflowObserverProfile _observerProfile;
 
     public ServerAppCiAiEvidenceHost(
+        JsonlCiAiRequestTaskMappingJournal mappingJournal,
+        JsonlCiAiArtifactNoticeReceiptLedger noticeReceipts,
+        ICiAiArtifactTransport artifactTransport,
+        string receiverIdentity,
+        string providerRepository,
         IExecutionCiAiProviderRunObserver providerObserver,
         IGitHubActionsArtifactArchiveDownloader artifactDownloader,
         IGitHubActionsWorkflowDefinitionReader workflowReader,
         JsonlCiAiWorkflowEvidencePacketStore packetStore,
         CiWorkflowObserverProfile observerProfile)
     {
+        _mappingJournal = mappingJournal ?? throw new ArgumentNullException(nameof(mappingJournal));
+        _noticeReceipts = noticeReceipts ?? throw new ArgumentNullException(nameof(noticeReceipts));
+        _artifactTransport = artifactTransport ?? throw new ArgumentNullException(nameof(artifactTransport));
+        ArgumentException.ThrowIfNullOrWhiteSpace(receiverIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerRepository);
+        _receiverIdentity = receiverIdentity;
+        _providerRepository = providerRepository;
         _providerObserver = providerObserver ?? throw new ArgumentNullException(nameof(providerObserver));
         _artifactDownloader = artifactDownloader ?? throw new ArgumentNullException(nameof(artifactDownloader));
         _workflowReader = workflowReader ?? throw new ArgumentNullException(nameof(workflowReader));
@@ -42,62 +61,94 @@ public sealed class ServerAppCiAiEvidenceHost
     }
 
     /// <summary>
-    /// Independently observes the exact persisted run, downloads and verifies both provider
-    /// artifacts, reads the pinned workflow definition, and asks CiAi's canonical V1 contract
-    /// to construct, validate, and durably stage the evidence packet.
+    /// Accepts the exact producer notice body through request-scoped authentication, validates
+    /// it against the persisted dispatch mapping, retrieves and hashes the immutable packet,
+    /// then independently verifies the provider run and protected workflow before accepting V1.
     /// </summary>
-    public async Task<ServerAppAcceptedCiAiEvidence> ObserveAndAcceptAsync(
-        CiAiRequestTaskMappingSnapshot request,
-        DateTimeOffset observedAt,
+    public async Task<ServerAppAcceptedCiAiEvidence> AcceptPublishedEvidenceAsync(
+        CiAiRequestTaskMappingSnapshot expectedRequest,
+        ReadOnlyMemory<byte> exactNoticeBody,
+        ICiAiArtifactNoticeAuthenticator requestAuthenticator,
+        DateTimeOffset receivedAt,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        if (observedAt == default)
-            throw new ArgumentException("Provider observation time is required.", nameof(observedAt));
-        if (request.Cancelled)
-            throw new InvalidOperationException("Cancelled dispatch intent cannot trigger provider observation.");
+        ArgumentNullException.ThrowIfNull(expectedRequest);
+        ArgumentNullException.ThrowIfNull(requestAuthenticator);
+        if (receivedAt == default)
+            throw new ArgumentException("Notice receipt time is required.", nameof(receivedAt));
+        if (expectedRequest.Cancelled)
+            throw new InvalidOperationException("Cancelled dispatch intent cannot accept workflow evidence.");
 
-        var mapping = request.Mapping.Validate();
-        var runBinding = request.RunBinding
-            ?? throw new InvalidOperationException("CiAi provider observation requires a persisted exact-run binding.");
-        var expectedProviderEventSha = ServerAppCiAiEvidenceIdentity.ResolveProviderEventSha(mapping, runBinding);
+        var expectedMapping = expectedRequest.Mapping.Validate();
+        var expectedRunBinding = expectedRequest.RunBinding
+            ?? throw new InvalidOperationException("Published workflow evidence requires a persisted exact-run binding.");
+        expectedRunBinding.ValidateAgainst(expectedMapping);
 
+        // The authenticator is request-scoped. It must verify issuer, audience, signature,
+        // subject, scope, expiry, and sender-repository authorization before returning identity.
+        var noticePolicy = new CiAiArtifactNoticeValidationPolicy(
+            _receiverIdentity,
+            _providerRepository,
+            CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityId,
+            CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityVersion,
+            expectedMapping.TrustedWorkflowSha);
+        var ingress = new CiAiArtifactNoticeIngress(
+            requestAuthenticator, _mappingJournal, noticePolicy, _noticeReceipts);
+        var ingressResult = await ingress.AcceptAsync(
+            exactNoticeBody, receivedAt, cancellationToken).ConfigureAwait(false);
+
+        var validatedRequest = ingressResult.ValidatedNotice.Request;
+        EnsureSameDispatch(expectedRequest, validatedRequest);
+        var mapping = validatedRequest.Mapping.Validate();
+        var runBinding = validatedRequest.RunBinding
+            ?? throw new InvalidOperationException("Authenticated artifact notice has no exact-run binding.");
+
+        var retrieval = new CiAiArtifactRetrievalCoordinator(_artifactTransport);
+        var retrievedArtifact = await retrieval.RetrieveAndVerifyAsync(
+            ingressResult.ValidatedNotice, receivedAt, cancellationToken).ConfigureAwait(false);
+
+        // Re-observe GitHub independently. The notice is metadata, not evidence that the
+        // provider run, candidate checkout, or protected workflow actually produced the packet.
         var providerRun = await _providerObserver.ObserveAsync(
-            request, _observerProfile, observedAt, cancellationToken).ConfigureAwait(false);
+            validatedRequest, _observerProfile, receivedAt, cancellationToken).ConfigureAwait(false);
+        var expectedProviderEventSha = ServerAppCiAiEvidenceIdentity.ResolveProviderEventSha(mapping, runBinding);
 
         var provenanceArchive = await _artifactDownloader.DownloadAsync(
             providerRun.ProvenanceArtifact,
             mapping.Repository,
             runBinding.RunId,
             expectedProviderEventSha,
-            observedAt,
+            receivedAt,
             cancellationToken).ConfigureAwait(false);
-
         var testResultsArchive = await _artifactDownloader.DownloadAsync(
             providerRun.TestResultsArtifact,
             mapping.Repository,
             runBinding.RunId,
             expectedProviderEventSha,
-            observedAt,
+            receivedAt,
             cancellationToken).ConfigureAwait(false);
 
-        // The persisted mapping pins the protected workflow revision used when this run was
-        // authorized. Read that exact commit; do not resolve a mutable branch name at acceptance.
+        // The workflow-definition SHA is not the provider event/head SHA. Read the exact
+        // protected workflow revision from the dispatch mapping; do not resolve a mutable ref.
         var approvedWorkflowBytes = await _workflowReader.ReadAsync(
             mapping.Repository,
             mapping.WorkflowPath,
             mapping.TrustedWorkflowSha,
             cancellationToken).ConfigureAwait(false);
 
-        var accepted = ExecutionCiAiWorkflowEvidenceAcceptanceService.ObserveAndAccept(
-            request,
+        var accepted = ExecutionCiAiWorkflowEvidenceAcceptanceService.Accept(
+            ingressResult,
+            retrievedArtifact,
             providerRun,
             provenanceArchive,
             _observerProfile,
+            CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityId,
+            CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityVersion,
+            mapping.TrustedWorkflowSha,
             approvedWorkflowBytes,
             approvedWorkflowBytes,
             _packetStore,
-            observedAt);
+            receivedAt);
 
         var expectedTestArtifactName = _observerProfile.TestArtifactName(runBinding.RunId, runBinding.RunAttempt);
         if (!string.Equals(mapping.SourceArtifactName, expectedTestArtifactName, StringComparison.Ordinal))
@@ -133,13 +184,40 @@ public sealed class ServerAppCiAiEvidenceHost
             accepted.Packet,
             testResultSource,
             requiredJobPolicy,
-            observedAt);
+            receivedAt);
 
         return new ServerAppAcceptedCiAiEvidence(
+            validatedRequest,
             accepted,
             verifiedTestResultsArchive,
             testResultsBinding,
             testResultReport,
-            observedAt);
+            receivedAt);
+    }
+
+    private static void EnsureSameDispatch(
+        CiAiRequestTaskMappingSnapshot expected,
+        CiAiRequestTaskMappingSnapshot actual)
+    {
+        var left = expected.Mapping.Validate();
+        var right = actual.Mapping.Validate();
+        var leftRun = expected.RunBinding
+            ?? throw new InvalidOperationException("Expected dispatch has no exact run binding.");
+        var rightRun = actual.RunBinding
+            ?? throw new InvalidOperationException("Authenticated dispatch has no exact run binding.");
+        if (expected.Cancelled || actual.Cancelled ||
+            !string.Equals(left.RequestId, right.RequestId, StringComparison.Ordinal) ||
+            !string.Equals(left.OperationId, right.OperationId, StringComparison.Ordinal) ||
+            !string.Equals(left.IdempotencyKey, right.IdempotencyKey, StringComparison.Ordinal) ||
+            !string.Equals(left.TaskId, right.TaskId, StringComparison.Ordinal) ||
+            !string.Equals(left.CorrelationId, right.CorrelationId, StringComparison.Ordinal) ||
+            !string.Equals(left.Repository, right.Repository, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(left.CandidateRef, right.CandidateRef, StringComparison.Ordinal) ||
+            !string.Equals(left.CandidateSha, right.CandidateSha, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(left.WorkflowPath, right.WorkflowPath, StringComparison.Ordinal) ||
+            !string.Equals(left.TrustedWorkflowSha, right.TrustedWorkflowSha, StringComparison.OrdinalIgnoreCase) ||
+            leftRun.RunId != rightRun.RunId || leftRun.RunAttempt != rightRun.RunAttempt ||
+            !string.Equals(leftRun.EventSha, rightRun.EventSha, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Authenticated artifact notice resolved a different persisted dispatch identity.");
     }
 }
