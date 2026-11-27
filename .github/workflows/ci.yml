@@ -81,6 +81,9 @@ jobs:
       - name: Build Execution host integration
         run: |
           dotnet build src/ServerApp.ExecutionHost/ServerApp.ExecutionHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
+      - name: Run pinned CiAi contract checks
+        run: |
+          dotnet run --project _deps/FSM_Execution/dependencies/CiAi/tests/TheSingularityWorkshop.CiAi.ContractTests/TheSingularityWorkshop.CiAi.ContractTests.csproj --configuration Release
       - name: Run core contract checks
         run: |
           dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release
