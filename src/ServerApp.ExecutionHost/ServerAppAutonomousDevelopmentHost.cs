@@ -54,6 +54,19 @@ public sealed class ServerAppAutonomousDevelopmentHost
         _evidenceLifecycle.ApplyAuthoritativeEvidence(
             taskId, leaseId, request, acceptedEvidence, maximumRepairDuration, now);
 
+    public WorkTaskSnapshot ApplyAuthoritativeWorkflowEvidence(
+        string taskId,
+        Guid leaseId,
+        ServerAppAcceptedCiAiEvidence acceptedEvidence,
+        TimeSpan maximumRepairDuration,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(acceptedEvidence);
+        return _evidenceLifecycle.ApplyAuthoritativeEvidence(
+            taskId, leaseId, acceptedEvidence.Request, acceptedEvidence.WorkflowEvidence,
+            maximumRepairDuration, now);
+    }
+
     /// <summary>
     /// Consumes a retrieved and byte-verified ciai.test-results.v1 artifact through the
     /// persistent Execution coordinator, then starts a repair turn only if that report
