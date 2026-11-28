@@ -27,7 +27,7 @@ public sealed class ServerAppAcceptedCiAiEvidence
         ObservedAt = observedAt;
     }
 
-    public CiAiRequestTaskMappingTaskSnapshot Request { get; }
+    public CiAiRequestTaskMappingSnapshot Request { get; }
     public ExecutionAcceptedCiAiWorkflowEvidence WorkflowEvidence { get; }
     public CiTestResultArtifactArchive TestResultsArchive { get; }
     public CiTestResultProviderArtifactBinding TestResultsSourceBinding { get; }
