@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TrentBest/TheSingularityWorkshop.CiAi
-          ref: 34e6b6c810caee370d4137ab242768f692a11cfe
+          ref: c846b8b5b6d41ae5df4735d90a8ad5d167b05b69
           path: _deps/FSM_Execution/dependencies/CiAi
           submodules: recursive
       - name: Checkout FSM_COS source (pinned)
