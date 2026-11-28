@@ -57,7 +57,7 @@ The report is diagnostic context only. It cannot satisfy a required check, decla
 
 ### Dispatch identity and idempotency
 
-Both producer enqueuers preserve the original request ID and operation ID from the persisted dispatch mapping. The base dispatch idempotency key is deterministically scoped by artifact capability, so `ciai.workflow-evidence` and `ciai.test-results` receive distinct, stable receipt keys for the same dispatch. Execution recomputes and validates those keys; they are not synthesized from run IDs or report hashes.
+Both producer enqueuers preserve the original request ID and operation ID from the persisted dispatch mapping. The base dispatch idempotency key is deterministically scoped by exact request ID, operation ID, and artifact capability, so `ciai.workflow-evidence` and `ciai.test-results` receive distinct, stable receipt keys for the same dispatch. Execution recomputes and validates those keys; they are not synthesized from run IDs or report hashes.
 
 ### Remaining live-host boundary
 
