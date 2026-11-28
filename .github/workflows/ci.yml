@@ -2,7 +2,7 @@ name: ServerApp CI
 
 on:
   push:
-    branches: [development, master]
+    branches: [development, master, feature/**, work/**, integration/**]
   pull_request:
     branches: [development, master]
 
@@ -19,8 +19,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TrentBest/TheSingularityWorkshop.FSM_Execution
-          ref: 9907f158b6fa38ab7556bbbc373a0b4097ae53c2
+          ref: 1b85d63da271500df988e2590f7c9726dc132a99
           path: _deps/FSM_Execution
+      - name: Checkout CiAi source and its source dependencies (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: TrentBest/TheSingularityWorkshop.CiAi
+          ref: bc2507efee90d9e46af53169ce0ce49ccd0a3c9c
+          path: _deps/FSM_Execution/dependencies/CiAi
+          submodules: recursive
       - name: Checkout FSM_COS source (pinned)
         uses: actions/checkout@v4
         with:
@@ -76,6 +83,9 @@ jobs:
       - name: Build Execution host integration
         run: |
           dotnet build src/ServerApp.ExecutionHost/ServerApp.ExecutionHost.csproj --configuration Release -p:WorkshopUseRepositorySources=true
+      - name: Run pinned CiAi contract checks
+        run: |
+          dotnet run --project _deps/FSM_Execution/dependencies/CiAi/tests/TheSingularityWorkshop.CiAi.ContractTests/TheSingularityWorkshop.CiAi.ContractTests.csproj --configuration Release
       - name: Run core contract checks
         run: |
           dotnet run --project tests/ServerApp.ContractChecks/ServerApp.ContractChecks.csproj --configuration Release

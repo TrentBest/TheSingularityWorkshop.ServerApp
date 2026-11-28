@@ -8,6 +8,8 @@ internal static class Program
 {
     private static async Task Main()
     {
+        ServerAppCiAiEvidenceLifecycleContractChecks.Run();
+        ProviderEventShaIsDistinctFromWorkflowDefinitionSha();
         await SuccessfulRoleActivationIsAExecutionWorkflow();
         await FailedRoleActivationFailsTheExecutionWorkflow();
         await DuplicatePendingInstanceIsRejected();
@@ -17,6 +19,38 @@ internal static class Program
         await CompositionFailurePreventsRoleActivation();
         await NotReadyComposedRoleFailsTheWorkflow();
         Console.WriteLine("All ServerApp Execution host contract checks passed.");
+    }
+
+    private static void ProviderEventShaIsDistinctFromWorkflowDefinitionSha()
+    {
+        const string repository = "owner/repo";
+        const string workflowSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string eventSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var createdAt = DateTimeOffset.Parse("2026-11-27T10:00:00Z");
+        var mapping = new CiAiRequestTaskMapping(
+            1, "request-1", "operation-1", "idempotency-1", "task-1", "correlation-1",
+            repository, "refs/heads/work/task-1", candidateSha, ".github/workflows/ci.yml",
+            "refs/heads/development", workflowSha, "Build", "Resolve candidate", "Verify candidate",
+            "ciai-production", "https://artifacts.example.test/",
+            "https://ciai.example.test/api/v1/integrations/ciai/artifact-receipts",
+            "ciai-ack-profile", createdAt, createdAt.AddHours(2), TrustedEventSha: eventSha)
+        {
+            JobKey = "build"
+        }.Validate();
+        var binding = new CiAiDispatchRunBinding(
+            123, 1, repository, ".github/workflows/ci.yml", "refs/heads/development",
+            workflowSha, "refs/heads/work/task-1", candidateSha, "workflow_dispatch",
+            createdAt.AddMinutes(1), EventSha: eventSha);
+
+        var resolved = ServerAppCiAiEvidenceIdentity.ResolveProviderEventSha(mapping, binding);
+        Assert(resolved == eventSha && resolved != workflowSha,
+            "provider artifact lookup must use the exact event/head SHA, not the trusted workflow-definition SHA");
+        var deliveryIdentity = ServerAppCiAiEvidenceIdentity.CreateDeliveryIdentity(mapping);
+        Assert(deliveryIdentity.RequestId == mapping.RequestId &&
+            deliveryIdentity.OperationId == mapping.OperationId &&
+            deliveryIdentity.IdempotencyKey == mapping.IdempotencyKey,
+            "CiAi evidence delivery did not preserve the exact pre-dispatch mapping identity");
     }
 
     private static async Task SuccessfulRoleActivationIsAExecutionWorkflow()

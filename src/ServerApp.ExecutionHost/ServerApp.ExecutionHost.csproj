@@ -7,8 +7,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../ServerApp.Core/ServerApp.Core.csproj" />
     <ProjectReference Include="../../_deps/FSM_Execution/src/Execution.Workflow/Execution.Workflow.csproj" />
+    <ProjectReference Include="../../_deps/FSM_Execution/src/Execution.Approvals.AspNetCore/Execution.Approvals.AspNetCore.csproj" />
     <ProjectReference Include="../../_deps/FSM_COS/src/FSM_COS/FSM_COS.csproj" />
   </ItemGroup>
 </Project>
