@@ -145,9 +145,15 @@ public sealed class ServerAppCiAiEvidenceHost
             receivedAt,
             cancellationToken).ConfigureAwait(false);
 
-        // The workflow-definition SHA is not the provider event/head SHA. Read the exact
-        // protected workflow revision from the dispatch mapping; do not resolve a mutable ref.
-        var approvedWorkflowBytes = await _workflowReader.ReadAsync(
+        // The provider's workflow SHA and the protected workflow-definition SHA are
+        // distinct identities. Read both immutable revisions independently; passing the
+        // approved bytes twice would silently skip the run-vs-approved content comparison.
+        var workflowBytesAtRunRevision = await _workflowReader.ReadAsync(
+            mapping.Repository,
+            mapping.WorkflowPath,
+            providerRun.Run.WorkflowSha,
+            cancellationToken).ConfigureAwait(false);
+        var workflowBytesAtApprovedRevision = await _workflowReader.ReadAsync(
             mapping.Repository,
             mapping.WorkflowPath,
             mapping.TrustedWorkflowSha,
@@ -162,8 +168,8 @@ public sealed class ServerAppCiAiEvidenceHost
             CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityId,
             CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityVersion,
             mapping.TrustedWorkflowSha,
-            approvedWorkflowBytes,
-            approvedWorkflowBytes,
+            workflowBytesAtRunRevision,
+            workflowBytesAtApprovedRevision,
             _packetStore,
             receivedAt);
 
