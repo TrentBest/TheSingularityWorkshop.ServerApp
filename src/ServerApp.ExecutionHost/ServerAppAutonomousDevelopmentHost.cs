@@ -79,19 +79,26 @@ public sealed class ServerAppAutonomousDevelopmentHost
         string authorizedBranch,
         string candidateCommitSha,
         Guid capabilityId,
+        ServerAppAcceptedCiAiEvidence acceptedEvidence,
         ExecutionVerifiedCiAiReportArtifact verifiedArtifact,
-        CiAiHostObservedSourceArtifactBinding? sourceArtifactBinding,
         DateTimeOffset now,
         string priorTurnId,
         string priorCandidateCommitSha,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(acceptedEvidence);
         ArgumentNullException.ThrowIfNull(verifiedArtifact);
+        var acceptedMapping = acceptedEvidence.Request.Mapping.Validate();
+        var reportMapping = verifiedArtifact.Request.Mapping.Validate();
+        if (!string.Equals(acceptedMapping.RequestId, reportMapping.RequestId, StringComparison.Ordinal) ||
+            !string.Equals(acceptedMapping.OperationId, reportMapping.OperationId, StringComparison.Ordinal) ||
+            !string.Equals(acceptedMapping.CandidateSha, reportMapping.CandidateSha, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Diagnostic report notice is not bound to the same accepted workflow-evidence dispatch.");
         ArgumentException.ThrowIfNullOrWhiteSpace(priorTurnId);
         ArgumentException.ThrowIfNullOrWhiteSpace(priorCandidateCommitSha);
 
         var diagnostic = _tasks.ConsumeCiAiDiagnosticReport(
-            taskId, leaseId, verifiedArtifact, sourceArtifactBinding, now);
+            taskId, leaseId, verifiedArtifact, acceptedEvidence.SourceArtifactBinding, now);
         if (diagnostic.Verdict != "ActionableFailure")
             throw new UnauthorizedAccessException("HeadlessAi repair turns require a matching actionable CiAi diagnostic report.");
 
