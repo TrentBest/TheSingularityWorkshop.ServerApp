@@ -3,6 +3,8 @@ name: ServerApp CI
 on:
   push:
     branches: [development, master, feature/**, work/**, integration/**]
+  pull_request:
+    branches: [development, master]
 
 permissions:
   contents: read
