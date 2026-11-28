@@ -7,13 +7,34 @@ namespace ServerApp.ExecutionHost;
 /// One authenticated producer notice and independently accepted workflow packet, paired
 /// with the separately verified test-results archive used only for diagnostics.
 /// </summary>
-public sealed record ServerAppAcceptedCiAiEvidence(
-    CiAiRequestTaskMappingSnapshot Request,
-    ExecutionAcceptedCiAiWorkflowEvidence WorkflowEvidence,
-    CiTestResultArtifactArchive TestResultsArchive,
-    CiTestResultProviderArtifactBinding TestResultsSourceBinding,
-    CiTestResultReport TestResultReport,
-    DateTimeOffset ObservedAt);
+public sealed class ServerAppAcceptedCiAiEvidence
+{
+    internal ServerAppAcceptedCiAiEvidence(
+        CiAiRequestTaskMappingSnapshot request,
+        ExecutionAcceptedCiAiWorkflowEvidence workflowEvidence,
+        CiTestResultArtifactArchive testResultsArchive,
+        CiTestResultProviderArtifactBinding testResultsSourceBinding,
+        CiAiHostObservedSourceArtifactBinding sourceArtifactBinding,
+        CiTestResultReport testResultReport,
+        DateTimeOffset observedAt)
+    {
+        Request = request;
+        WorkflowEvidence = workflowEvidence;
+        TestResultsArchive = testResultsArchive;
+        TestResultsSourceBinding = testResultsSourceBinding;
+        SourceArtifactBinding = sourceArtifactBinding;
+        TestResultReport = testResultReport;
+        ObservedAt = observedAt;
+    }
+
+    public CiAiRequestTaskMappingTaskSnapshot Request { get; }
+    public ExecutionAcceptedCiAiWorkflowEvidence WorkflowEvidence { get; }
+    public CiTestResultArtifactArchive TestResultsArchive { get; }
+    public CiTestResultProviderArtifactBinding TestResultsSourceBinding { get; }
+    public CiAiHostObservedSourceArtifactBinding SourceArtifactBinding { get; }
+    public CiTestResultReport TestResultReport { get; }
+    public DateTimeOffset ObservedAt { get; }
+}
 
 /// <summary>
 /// ServerApp composition root for the authenticated CiAi producer → Execution consumer path.
@@ -27,7 +48,6 @@ public sealed class ServerAppCiAiEvidenceHost
     private readonly JsonlCiAiArtifactNoticeReceiptLedger _noticeReceipts;
     private readonly ICiAiArtifactTransport _artifactTransport;
     private readonly string _receiverIdentity;
-    private readonly string _providerRepository;
     private readonly IExecutionCiAiProviderRunObserver _providerObserver;
     private readonly IGitHubActionsArtifactArchiveDownloader _artifactDownloader;
     private readonly IGitHubActionsWorkflowDefinitionReader _workflowReader;
@@ -39,7 +59,6 @@ public sealed class ServerAppCiAiEvidenceHost
         JsonlCiAiArtifactNoticeReceiptLedger noticeReceipts,
         ICiAiArtifactTransport artifactTransport,
         string receiverIdentity,
-        string providerRepository,
         IExecutionCiAiProviderRunObserver providerObserver,
         IGitHubActionsArtifactArchiveDownloader artifactDownloader,
         IGitHubActionsWorkflowDefinitionReader workflowReader,
@@ -50,9 +69,7 @@ public sealed class ServerAppCiAiEvidenceHost
         _noticeReceipts = noticeReceipts ?? throw new ArgumentNullException(nameof(noticeReceipts));
         _artifactTransport = artifactTransport ?? throw new ArgumentNullException(nameof(artifactTransport));
         ArgumentException.ThrowIfNullOrWhiteSpace(receiverIdentity);
-        ArgumentException.ThrowIfNullOrWhiteSpace(providerRepository);
         _receiverIdentity = receiverIdentity;
-        _providerRepository = providerRepository;
         _providerObserver = providerObserver ?? throw new ArgumentNullException(nameof(providerObserver));
         _artifactDownloader = artifactDownloader ?? throw new ArgumentNullException(nameof(artifactDownloader));
         _workflowReader = workflowReader ?? throw new ArgumentNullException(nameof(workflowReader));
@@ -88,7 +105,7 @@ public sealed class ServerAppCiAiEvidenceHost
         // subject, scope, expiry, and sender-repository authorization before returning identity.
         var noticePolicy = new CiAiArtifactNoticeValidationPolicy(
             _receiverIdentity,
-            _providerRepository,
+            expectedMapping.Repository,
             CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityId,
             CiWorkflowEvidenceExecutionNoticeEnqueuer.CapabilityVersion,
             expectedMapping.TrustedWorkflowSha);
@@ -186,13 +203,62 @@ public sealed class ServerAppCiAiEvidenceHost
             requiredJobPolicy,
             receivedAt);
 
+        var sourceArtifactBinding = CiAiHostObservedSourceArtifactBinding.FromVerifiedProviderArtifact(
+            mapping,
+            runBinding,
+            testResultsBinding,
+            accepted.Packet,
+            requiredJobs[0],
+            verifiedTestResultsArchive.TrxBytes,
+            receivedAt);
+
         return new ServerAppAcceptedCiAiEvidence(
             validatedRequest,
             accepted,
             verifiedTestResultsArchive,
             testResultsBinding,
+            sourceArtifactBinding,
             testResultReport,
             receivedAt);
+    }
+
+    /// <summary>
+    /// Accepts the separate ciai.test-results.v1 notice only after the workflow-evidence
+    /// packet and provider TRX have already been independently accepted. The report bytes
+    /// must exactly match the host's own CiAi parser output from that verified TRX archive.
+    /// </summary>
+    public async Task<ExecutionVerifiedCiAiReportArtifact> AcceptPublishedDiagnosticReportAsync(
+        ServerAppAcceptedCiAiEvidence acceptedEvidence,
+        ReadOnlyMemory<byte> exactNoticeBody,
+        ICiAiArtifactNoticeAuthenticator requestAuthenticator,
+        DateTimeOffset receivedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(acceptedEvidence);
+        ArgumentNullException.ThrowIfNull(requestAuthenticator);
+        var expectedRequest = acceptedEvidence.Request;
+        var mapping = expectedRequest.Mapping.Validate();
+        var policy = new CiAiArtifactNoticeValidationPolicy(
+            _receiverIdentity,
+            mapping.Repository,
+            CiTestResultExecutionNoticeEnqueuer.CapabilityId,
+            CiTestResultExecutionNoticeEnqueuer.CapabilityVersion,
+            mapping.TrustedWorkflowSha);
+        var ingress = new CiAiArtifactNoticeIngress(
+            requestAuthenticator, _mappingJournal, policy, _noticeReceipts);
+        var ingressResult = await ingress.AcceptAsync(
+            exactNoticeBody, receivedAt, cancellationToken).ConfigureAwait(false);
+        EnsureSameDispatch(expectedRequest, ingressResult.ValidatedNotice.Request);
+
+        var retrieval = new CiAiArtifactRetrievalCoordinator(_artifactTransport);
+        var retrieved = await retrieval.RetrieveAndVerifyAsync(
+            ingressResult.ValidatedNotice, receivedAt, cancellationToken).ConfigureAwait(false);
+        var verified = ExecutionVerifiedCiAiReportArtifact.Verify(
+            retrieved, ingressResult.Receipt, receivedAt);
+        var independentlyParsedReport = acceptedEvidence.TestResultReport.ToCanonicalUtf8Bytes();
+        if (!verified.Bytes.Span.SequenceEqual(independentlyParsedReport))
+            throw new InvalidDataException("Published ciai.test-results.v1 bytes do not match the host's independently parsed exact TRX artifact.");
+        return verified;
     }
 
     private static void EnsureSameDispatch(
